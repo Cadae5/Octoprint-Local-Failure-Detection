@@ -76,8 +76,17 @@ class FailureDetectorPlugin(
     # ~~ TemplatePlugin mixin (MODIFIED) ~~
     def get_template_configs(self):
         return [
+            # The existing navbar icon and settings panel
             dict(type="navbar", custom_bindings=False),
-            dict(type="settings", custom_bindings=False)
+            dict(type="settings", custom_bindings=False),
+            
+            # --- NEW ---
+            # This dictionary defines our new main tab
+            dict(
+                type="tab",
+                name="Failure Detector",  # The name that appears on the tab
+                custom_bindings=False
+            )
         ]
 
     # ~~ AssetPlugin mixin (NEW) ~~
