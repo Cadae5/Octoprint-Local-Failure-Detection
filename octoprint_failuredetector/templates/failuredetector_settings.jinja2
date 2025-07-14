@@ -1,0 +1,33 @@
+<!-- octoprint_failuredetector/templates/failuredetector_settings.jinja2 -->
+<div id="settings_failuredetector">
+    <form class="form-horizontal">
+        <div class="control-group">
+            <label class="control-label">Webcam Snapshot URL</label>
+            <div class="controls">
+                <input type="text" class="input-block-level" data-bind="value: settings.plugins.failuredetector.webcam_snapshot_url">
+            </div>
+        </div>
+        <div class="control-group">
+            <label class="control-label">Check Interval (seconds)</label>
+            <div class="controls">
+                <input type="number" min="5" class="input-block-level" data-bind="value: settings.plugins.failuredetector.check_interval">
+            </div>
+        </div>
+        <div class="control-group">
+            <label class="control-label">Failure Confidence Threshold</label>
+            <div class="controls">
+                <input type="number" min="0.5" max="1.0" step="0.05" class="input-block-level" data-bind="value: settings.plugins.failuredetector.failure_confidence">
+            </div>
+        </div>
+        <div class="control-group">
+            <label class="control-label">Manual Check</label>
+            <div class="controls">
+                <button class="btn" data-bind="click: forceCheck, enable: !isChecking()">
+                    <i class="fa fa-camera"></i>
+                    Force Failure Check
+                </button>
+                <span class="muted" data-bind="text: lastResultText"></span>
+            </div>
+        </div>
+    </form>
+</div>
