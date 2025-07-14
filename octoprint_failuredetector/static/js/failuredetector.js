@@ -1,35 +1,32 @@
-// octoprint_failuredetector/static/js/failuredetector.js
+// octoprint_failuredetector/static/js/failuredetector.js (Updated for Tab View)
 
 $(function() {
     function FailureDetectorViewModel(parameters) {
         var self = this;
 
-        self.settings = parameters[0];
+        self.settingsViewModel = parameters[0];
 
         // --- Observables for UI state ---
-        // Is the plugin currently running a check?
         self.isChecking = ko.observable(false);
-        // The text result of the last check (e.g., "85.34%")
         self.lastResult = ko.observable("N/A");
-        // A descriptive status text for tooltips
         self.statusText = ko.observable("Failure Detector is Idle");
 
+        // --- NEW: Observable for the webcam stream URL ---
+        self.webcamStreamUrl = ko.observable(self.settingsViewModel.settings.webcam.streamUrl());
+
         // --- Computed observables for dynamic UI ---
-        // Dynamically changes the color of the navbar icon
         self.statusColor = ko.computed(function() {
             if (self.statusText().includes("Failure")) return "red";
             if (self.statusText().includes("Error")) return "orange";
             if (self.isChecking()) return "deepskyblue";
-            return "white"; // Default color
+            return "#333"; // Use a darker color for text in the tab
         });
 
-        // Text shown in the settings panel next to the button
         self.lastResultText = ko.computed(function() {
-            return "Last check result: " + self.lastResult();
+            return "Last check confidence: " + self.lastResult();
         });
 
         // --- API Interaction ---
-        // Sends a command to the backend to force a check
         self.forceCheck = function() {
             if (self.isChecking()) return;
             OctoPrint.simpleApiCommand("failuredetector", "force_check")
@@ -42,13 +39,11 @@ $(function() {
         };
 
         // --- Plugin Message Handler ---
-        // This function receives messages sent from the Python backend
         self.onDataUpdaterPluginMessage = function(plugin, data) {
             if (plugin !== "failuredetector") {
                 return;
             }
 
-            // Update UI based on the message content
             if (data.status === "checking") {
                 self.isChecking(true);
                 self.statusText("Checking for failure...");
@@ -68,7 +63,7 @@ $(function() {
                     title: 'Failure Detected!',
                     text: 'The AI detected a print failure with ' + data.result + ' confidence and paused the print.',
                     type: 'error',
-                    hide: false // Keep the notification until the user closes it
+                    hide: false
                 });
             } else if (data.status === "error") {
                 self.isChecking(false);
@@ -78,10 +73,15 @@ $(function() {
         };
     }
 
-    // Register the ViewModel with OctoPrint
+    // --- THIS IS THE IMPORTANT CHANGE ---
+    // Register the ViewModel with all three of our UI components
     OCTOPRINT_VIEWMODELS.push({
         construct: FailureDetectorViewModel,
         dependencies: ["settingsViewModel"],
-        elements: ["#navbar_failuredetector", "#settings_failuredetector"]
+        elements: [
+            "#navbar_failuredetector", 
+            "#settings_failuredetector",
+            "#tab_failuredetector"  // <-- Add the ID of our new tab
+        ]
     });
 });
