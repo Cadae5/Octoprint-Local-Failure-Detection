@@ -1,9 +1,10 @@
-// octoprint_failuredetector/static/js/failuredetector.js (Updated for Tab View)
+// octoprint_failuredetector/static/js/failuredetector.js (Corrected Version)
 
 $(function() {
     function FailureDetectorViewModel(parameters) {
         var self = this;
 
+        // Correctly assign the dependency
         self.settingsViewModel = parameters[0];
 
         // --- Observables for UI state ---
@@ -11,15 +12,16 @@ $(function() {
         self.lastResult = ko.observable("N/A");
         self.statusText = ko.observable("Failure Detector is Idle");
 
-        // --- NEW: Observable for the webcam stream URL ---
-        self.webcamStreamUrl = ko.observable(self.settingsViewModel.settings.webcam.streamUrl());
+        // --- THE CORRECTED LINE ---
+        // The settingsViewModel IS the settings object, so we access .webcam directly.
+        self.webcamStreamUrl = ko.observable(self.settingsViewModel.webcam.streamUrl());
 
         // --- Computed observables for dynamic UI ---
         self.statusColor = ko.computed(function() {
             if (self.statusText().includes("Failure")) return "red";
             if (self.statusText().includes("Error")) return "orange";
             if (self.isChecking()) return "deepskyblue";
-            return "#333"; // Use a darker color for text in the tab
+            return "#333";
         });
 
         self.lastResultText = ko.computed(function() {
@@ -73,15 +75,14 @@ $(function() {
         };
     }
 
-    // --- THIS IS THE IMPORTANT CHANGE ---
-    // Register the ViewModel with all three of our UI components
+    // Register the ViewModel with all of our UI components
     OCTOPRINT_VIEWMODELS.push({
         construct: FailureDetectorViewModel,
         dependencies: ["settingsViewModel"],
         elements: [
             "#navbar_failuredetector", 
             "#settings_failuredetector",
-            "#tab_failuredetector"  // <-- Add the ID of our new tab
+            "#tab_failuredetector"
         ]
     });
 });
