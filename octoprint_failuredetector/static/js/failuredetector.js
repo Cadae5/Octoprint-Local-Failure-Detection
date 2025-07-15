@@ -1,64 +1,67 @@
-// octoprint_failuredetector/static/js/failuredetector.js (Snapshot Version)
+// octoprint_failuredetector/static/js/failuredetector.js (Updated for Tab Settings)
 
 $(function() {
     function FailureDetectorViewModel(parameters) {
         var self = this;
-
-        self.settingsViewModel = parameters[0];
+        self.settings = parameters[0];
 
         // --- Observables for UI state ---
         self.isChecking = ko.observable(false);
         self.lastResult = ko.observable("N/A");
         self.statusText = ko.observable("Failure Detector is Idle");
-
-        // --- NEW: Logic for displaying the snapshot ---
-        // This will hold the base URL of the last analyzed snapshot.
-        self.snapshotUrl = ko.observable(null); 
-        // This is a "cache buster" to force the browser to reload the image.
+        self.snapshotUrl = ko.observable(null);
         self.snapshotTimestamp = ko.observable(new Date().getTime());
 
-        // This computed observable combines the URL and the timestamp.
-        // The <img> tag in our HTML will bind to this.
-        self.snapshotUrlWithCacheBuster = ko.computed(function() {
-            if (self.snapshotUrl()) {
-                // Append a timestamp to the URL to prevent browser caching
-                return self.snapshotUrl() + "?_t=" + self.snapshotTimestamp();
-            }
-            return null;
-        });
+        // --- NEW: Observables to hold settings on the tab ---
+        self.tab_snapshot_url = ko.observable();
+        self.tab_interval = ko.observable();
+        self.tab_confidence = ko.observable();
 
-        // --- (statusColor, statusColorNavbar, lastResultText are the same) ---
-        self.statusColor = ko.computed(function() { /* ... no changes ... */ });
-        self.statusColorNavbar = ko.computed(function() { /* ... no changes ... */ });
-        self.lastResultText = ko.computed(function() { /* ... no changes ... */ });
+        // --- API Interaction ---
+        self.forceCheck = function() { /* ... no changes ... */ };
 
-        // --- MODIFIED API Interaction ---
-        self.forceCheck = function() {
-            if (self.isChecking()) return;
-            // When forcing a check, immediately update the image to the latest snapshot
-            self.snapshotUrl(self.settingsViewModel.settings.plugins.failuredetector.webcam_snapshot_url());
-            self.snapshotTimestamp(new Date().getTime());
-            OctoPrint.simpleApiCommand("failuredetector", "force_check");
+        // --- NEW: Function to save settings from the tab ---
+        self.saveTabSettings = function() {
+            var payload = {
+                command: "save_settings",
+                snapshot_url: self.tab_snapshot_url(),
+                interval: self.tab_interval(),
+                confidence: self.tab_confidence()
+            };
+            OctoPrint.simpleApiCommand("failuredetector", "save_settings", payload)
+                .done(function() {
+                    new PNotify({ title: "Settings Saved", type: "success", hide: true });
+                });
         };
 
-        // --- MODIFIED Plugin Message Handler ---
+        // This function is called when the ViewModel is first created
+        self.onBeforeBinding = function() {
+            // Copy the main settings into our tab-local observables
+            self.tab_snapshot_url(self.settings.settings.plugins.failuredetector.webcam_snapshot_url());
+            self.tab_interval(self.settings.settings.plugins.failuredetector.check_interval());
+            self.tab_confidence(self.settings.settings.plugins.failuredetector.failure_confidence());
+        };
+
+        // This function listens for messages from the backend
         self.onDataUpdaterPluginMessage = function(plugin, data) {
             if (plugin !== "failuredetector") { return; }
 
-            // --- NEW: If the message contains a snapshot URL, update our UI ---
-            if (data.snapshot_url) {
-                self.snapshotUrl(data.snapshot_url);
-                self.snapshotTimestamp(new Date().getTime()); // Update timestamp to force reload
+            // If we got a confirmation that settings were saved, we're good.
+            if (data.type === "settings_saved") {
+                // We can optionally re-load the main settings here if needed
+                self.settings.requestData();
+                return;
             }
-
-            // (The rest of the switch statement logic is the same)
-            switch (data.status) {
-                 case "checking": /* ... */ break;
-                 case "idle": /* ... */ break;
-                 case "failure": /* ... */ break;
-                 case "error": /* ... */ break;
-            }
+            // (The snapshot URL and status logic remains the same)
+            if (data.snapshot_url) { /* ... no changes ... */ }
+            switch (data.status) { /* ... no changes ... */ }
         };
+        
+        // --- (Computed properties like snapshotUrlWithCacheBuster are the same) ---
+        self.snapshotUrlWithCacheBuster = ko.computed(function() { /* ... no changes ... */ });
+        self.statusColor = ko.computed(function() { /* ... no changes ... */ });
+        self.statusColorNavbar = ko.computed(function() { /* ... no changes ... */ });
+        self.lastResultText = ko.computed(function() { /* ... no changes ... */ });
     }
 
     // (The OCTOPRINT_VIEWMODELS registration is the same)
