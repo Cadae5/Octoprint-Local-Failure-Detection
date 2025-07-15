@@ -73,7 +73,7 @@ class FailureDetectorPlugin(
         ]
 
     def get_assets(self):
-        return dict(js=["js/failuredetector.js", "js/failuredetector_settings.js"])
+        return dict(js=["js/failuredetector.js"])
 
     def get_api_commands(self):
         return dict(force_check=[])
