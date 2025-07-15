@@ -89,10 +89,37 @@ class FailureDetectorPlugin(
             )
         ]
 
-    # ~~ AssetPlugin mixin (NEW) ~~
+            # ~~ AssetPlugin mixin (MODIFIED) ~~
     def get_assets(self):
+        # We now have two javascript files to load
         return dict(
-            js=["js/failuredetector.js"]
+            js=["js/failuredetector.js", "js/failuredetector_settings.js"]
+        )
+        
+    # ~~ SimpleApiPlugin mixin (MODIFIED) ~~
+    def get_api_commands(self):
+        # Add a new command for saving settings from the tab
+        return dict(
+            force_check=[],
+            save_settings=["snapshot_url", "interval", "confidence"]
+        )
+
+    def on_api_command(self, command, data):
+        if command == "force_check":
+            self._logger.info("Forcing a manual failure check via API.")
+            check_thread = threading.Thread(target=self.perform_check)
+            check_thread.daemon = True
+            check_thread.start()
+        
+        # Handle the new command
+        elif command == "save_settings":
+            self._logger.info("Saving settings from plugin tab.")
+            self._settings.set(["webcam_snapshot_url"], data.get("snapshot_url"))
+            self._settings.set_int(["check_interval"], int(data.get("interval")))
+            self._settings.set_float(["failure_confidence"], float(data.get("confidence")))
+            self._settings.save()
+            # Send a confirmation back to the UI
+            self._plugin_manager.send_plugin_message(self._identifier, {"type": "settings_saved"})```
         )
         
     # ~~ SimpleApiPlugin mixin (NEW) ~~
