@@ -1,10 +1,18 @@
-# __init__.py (Gutted Diagnostic Version 1)
+# __init__.py (Diagnostic Version 2 - Template Test)
 
 import octoprint.plugin
 
-class FailureDetectorPlugin(octoprint.plugin.StartupPlugin):
+# We add TemplatePlugin back to the list of inherited classes
+class FailureDetectorPlugin(
+    octoprint.plugin.StartupPlugin,
+    octoprint.plugin.TemplatePlugin
+):
     def on_after_startup(self):
-        self._logger.info("--- FailureDetector GUTTED PLUGIN has loaded. All features are disabled. ---")
+        self._logger.info("--- FailureDetector DIAGNOSTIC 2 has loaded. Testing TemplatePlugin. ---")
+
+    # This method is required by TemplatePlugin. We are keeping it empty for this test.
+    def get_template_configs(self):
+        return []
 
 # --- All boilerplate is still required ---
 __plugin_name__ = "AI Failure Detector"
