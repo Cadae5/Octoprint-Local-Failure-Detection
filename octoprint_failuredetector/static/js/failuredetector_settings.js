@@ -1,4 +1,4 @@
-// octoprint_failuredetector/static/js/failuredetector_settings.js
+// octoprint_failuredetector/static/js/failuredetector_settings.js (Repaired)
 
 $(function() {
     function FailureDetectorSettingsViewModel(parameters) {
@@ -6,11 +6,12 @@ $(function() {
         self.settings = parameters[0];
 
         self.testUrl = function() {
-            var url = $("#settings_failuredetector input[data-bind*='webcam_snapshot_url']").val();
+            // Get the URL reliably from the settings ViewModel
+            var url = self.settings.settings.plugins.failuredetector.webcam_snapshot_url();
             var result_text = $("#test_result_text");
 
             if (!url) {
-                result_text.text("Please enter a URL.").css("color", "orange");
+                result_text.text("Please enter a URL in the box above.").css("color", "orange");
                 return;
             }
 
@@ -18,12 +19,13 @@ $(function() {
             
             var tester = new Image();
             tester.onload = function() {
-                result_text.text("Success! Image loaded.").css("color", "green");
+                result_text.text("Success! Image loaded correctly.").css("color", "green");
             };
             tester.onerror = function() {
-                result_text.text("Error! Could not load image.").css("color", "red");
+                result_text.text("Error! Could not load image from that URL.").css("color", "red");
             };
-            tester.src = url + "?_t=" + new Date().getTime(); // Cache buster
+            // Add a cache-buster to the URL
+            tester.src = url + (url.indexOf("?") > -1 ? "&" : "?") + "_t=" + new Date().getTime();
         };
     }
 
