@@ -138,18 +138,25 @@ class FailureDetectorPlugin(
                     break
                 time.sleep(1)
 
+# In octoprint_failuredetector/__init__.py
+
+    # ... (keep everything else the same)
+
     def perform_check(self):
         # Tell the UI we are starting a check
         self._plugin_manager.send_plugin_message(self._identifier, dict(status="checking"))
+        
+        snapshot_url = self._settings.get(["webcam_snapshot_url"])
 
         try:
-            # ... (the entire image capture and inference logic is the same)
             # 1. CAPTURE IMAGE
-            snapshot_url = self._settings.get(["webcam_snapshot_url"])
             response = requests.get(snapshot_url, timeout=5)
             response.raise_for_status()
+            
             image_bytes = BytesIO(response.content)
             image = Image.open(image_bytes).convert('RGB')
+
+            # ... (The entire PREPROCESS and INFERENCE logic is the same) ...
             # 2. PREPROCESS IMAGE
             _, height, width, _ = self.input_details[0]['shape']
             image_resized = image.resize((width, height))
@@ -163,26 +170,37 @@ class FailureDetectorPlugin(
             probability = np.squeeze(output_data)
             failure_index = self.labels.index('failure')
             failure_prob = probability[failure_index] if hasattr(probability, "__len__") else (probability if failure_index == 1 else 1 - probability)
-            # --- End of same logic ---
-            
-            # 4. TAKE ACTION & SEND RESULT TO UI
+
+
+            # 4. TAKE ACTION & SEND RESULT + URL TO UI
             self._logger.info(f"Failure check complete. Failure probability: {failure_prob:.2%}")
-            # Send the detailed result to the UI
-            self._plugin_manager.send_plugin_message(self._identifier, dict(status="idle", result=f"{failure_prob:.2%}"))
+            
+            # --- MODIFIED ---
+            # Send the result AND the snapshot url to the UI
+            self._plugin_manager.send_plugin_message(self._identifier, dict(
+                status="idle", 
+                result=f"{failure_prob:.2%}",
+                snapshot_url=snapshot_url 
+            ))
 
             confidence_threshold = self._settings.get_float(["failure_confidence"])
-            if failure_prob > confidence_threshold and self.is_printing: # Check is_printing again
+            if failure_prob > confidence_threshold and self.is_printing:
                 self._logger.warning(f"FAILURE DETECTED! (Confidence: {failure_prob:.2%}). Pausing print.")
-                # Send a failure status to the UI before pausing
-                self._plugin_manager.send_plugin_message(self._identifier, dict(status="failure", result=f"{failure_prob:.2%}"))
+                
+                # --- MODIFIED ---
+                # Also send the URL on failure
+                self._plugin_manager.send_plugin_message(self._identifier, dict(
+                    status="failure", 
+                    result=f"{failure_prob:.2%}",
+                    snapshot_url=snapshot_url
+                ))
                 self._printer.pause_print(reason="ai_failure_detection")
                 self.is_printing = False
 
         except Exception as e:
             self._logger.error(f"An unexpected error occurred during failure check: {e}")
-            # Tell the UI the check failed
-            self._plugin_manager.send_plugin_message(self._identifier, dict(status="error", error=str(e)))
-            
+            self._plugin_manager.send_plugin_message(self._identifier, dict(status="error", error=str(e)))            
+
     # Boilerplate to load the plugin
     def get_update_information(self):
         return dict(
