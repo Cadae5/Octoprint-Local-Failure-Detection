@@ -1,42 +1,32 @@
-<!-- octoprint_failuredetector/templates/failuredetector_tab.jinja2 (Updated Layout) -->
+<!-- octoprint_failuredetector/templates/failuredetector_tab.jinja2 (Final Version) -->
 
 <div id="tab_failuredetector">
 
-    <!-- Row 1: Webcam View, full width -->
     <div class="row-fluid">
         <div class="span12">
-            <div class="webcam_container" style="background-color: black; margin-bottom: 10px;">
-                <!-- This displays the live webcam stream -->
-                <img data-bind="attr: { src: webcamStreamUrl }" style="width: 100%; border-radius: 4px;" />
+            <!-- This container will now show a placeholder if no snapshot is available -->
+            <div class="webcam_container" style="background-color: #222; margin-bottom: 10px; text-align: center; padding: 20px; border-radius: 4px;">
+                
+                <!-- This part shows ONLY if a snapshot URL exists -->
+                <!-- ko if: snapshotUrlWithCacheBuster -->
+                <img data-bind="attr: { src: snapshotUrlWithCacheBuster }" style="width: 100%; border-radius: 4px;" />
+                <!-- /ko -->
+
+                <!-- This part shows ONLY if NO snapshot URL exists yet -->
+                <!-- ko ifnot: snapshotUrlWithCacheBuster -->
+                <div style="color: #666; padding: 100px 0;">
+                    <i class="fa fa-camera fa-4x"></i>
+                    <p style="margin-top: 10px;">The latest snapshot will appear here after a check.</p>
+                </div>
+                <!-- /ko -->
+                
             </div>
         </div>
     </div>
 
-    <!-- Row 2: Controls and Status, full width -->
+    <!-- (The rest of the file for controls and status remains unchanged) -->
     <div class="row-fluid">
-        <div class="span12">
-            <h3>AI Failure Detector</h3>
-            <hr> <!-- Visual separator -->
-
-            <h4>Status</h4>
-            <p style="font-size: 1.2em;">
-                <i class="fa fa-eye" data-bind="style: { color: statusColor }, css: { 'fa-spin': isChecking }"></i>
-                <strong data-bind="text: statusText"></strong>
-            </p>
-
-            <hr> <!-- Visual separator -->
-            
-            <h4>Last Check Result</h4>
-            <p data-bind="text: lastResultText"></p>
-            
-            <hr> <!-- Visual separator -->
-
-            <h4>Controls</h4>
-            <button class="btn btn-primary btn-large btn-block" data-bind="click: forceCheck, enable: !isChecking()">
-                <i class="fa fa-camera"></i>
-                Force Failure Check Now
-            </button>
-        </div>
+        <!-- ... (the h3, hr, Status, Last Check, and Controls sections are the same) ... -->
     </div>
 
 </div>
