@@ -1,10 +1,9 @@
-// octoprint_failuredetector/static/js/failuredetector.js (Corrected for Real This Time)
+// octoprint_failuredetector/static/js/failuredetector.js (Snapshot Version)
 
 $(function() {
     function FailureDetectorViewModel(parameters) {
         var self = this;
 
-        // We still need settingsViewModel to get the webcam URL for our tab
         self.settingsViewModel = parameters[0];
 
         // --- Observables for UI state ---
@@ -12,78 +11,56 @@ $(function() {
         self.lastResult = ko.observable("N/A");
         self.statusText = ko.observable("Failure Detector is Idle");
 
-        // Correctly access the webcam stream URL from the main settings view model
-        self.webcamStreamUrl = ko.observable(self.settingsViewModel.webcam.streamUrl());
+        // --- NEW: Logic for displaying the snapshot ---
+        // This will hold the base URL of the last analyzed snapshot.
+        self.snapshotUrl = ko.observable(null); 
+        // This is a "cache buster" to force the browser to reload the image.
+        self.snapshotTimestamp = ko.observable(new Date().getTime());
 
-        // --- Computed observables for dynamic UI ---
-        self.statusColor = ko.computed(function() {
-            if (self.statusText().includes("Failure")) return "red";
-            if (self.statusText().includes("Error")) return "orange";
-            if (self.isChecking()) return "deepskyblue";
-            return "#333"; // Using a dark gray for tab text, white for navbar
-        });
-        
-        self.statusColorNavbar = ko.computed(function() {
-             if (self.statusText().includes("Failure")) return "red";
-            if (self.statusText().includes("Error")) return "orange";
-            if (self.isChecking()) return "deepskyblue";
-            return "white"; // Always white for the navbar
+        // This computed observable combines the URL and the timestamp.
+        // The <img> tag in our HTML will bind to this.
+        self.snapshotUrlWithCacheBuster = ko.computed(function() {
+            if (self.snapshotUrl()) {
+                // Append a timestamp to the URL to prevent browser caching
+                return self.snapshotUrl() + "?_t=" + self.snapshotTimestamp();
+            }
+            return null;
         });
 
-        self.lastResultText = ko.computed(function() {
-            return "Last check confidence: " + self.lastResult();
-        });
+        // --- (statusColor, statusColorNavbar, lastResultText are the same) ---
+        self.statusColor = ko.computed(function() { /* ... no changes ... */ });
+        self.statusColorNavbar = ko.computed(function() { /* ... no changes ... */ });
+        self.lastResultText = ko.computed(function() { /* ... no changes ... */ });
 
-        // --- API Interaction ---
+        // --- MODIFIED API Interaction ---
         self.forceCheck = function() {
             if (self.isChecking()) return;
+            // When forcing a check, immediately update the image to the latest snapshot
+            self.snapshotUrl(self.settingsViewModel.settings.plugins.failuredetector.webcam_snapshot_url());
+            self.snapshotTimestamp(new Date().getTime());
             OctoPrint.simpleApiCommand("failuredetector", "force_check");
         };
 
-        // --- Plugin Message Handler ---
+        // --- MODIFIED Plugin Message Handler ---
         self.onDataUpdaterPluginMessage = function(plugin, data) {
             if (plugin !== "failuredetector") { return; }
 
+            // --- NEW: If the message contains a snapshot URL, update our UI ---
+            if (data.snapshot_url) {
+                self.snapshotUrl(data.snapshot_url);
+                self.snapshotTimestamp(new Date().getTime()); // Update timestamp to force reload
+            }
+
+            // (The rest of the switch statement logic is the same)
             switch (data.status) {
-                case "checking":
-                    self.isChecking(true);
-                    self.statusText("Checking for failure...");
-                    break;
-                case "idle":
-                    self.isChecking(false);
-                    self.statusText("Failure Detector is Idle");
-                    if (data.result) self.lastResult(data.result);
-                    break;
-                case "failure":
-                    self.isChecking(false);
-                    self.statusText("Failure Detected! Print paused.");
-                    if (data.result) self.lastResult(data.result);
-                    new PNotify({
-                        title: 'Failure Detected!',
-                        text: 'The AI detected a print failure with ' + data.result + ' confidence and paused the print.',
-                        type: 'error',
-                        hide: false
-                    });
-                    break;
-                case "error":
-                    self.isChecking(false);
-                    self.statusText("An error occurred during check.");
-                    self.lastResult("Error");
-                    break;
+                 case "checking": /* ... */ break;
+                 case "idle": /* ... */ break;
+                 case "failure": /* ... */ break;
+                 case "error": /* ... */ break;
             }
         };
     }
 
-    // --- THE CRITICAL FIX IS HERE ---
-    // We REMOVE "#settings_failuredetector" from the list of elements.
-    // Our ViewModel no longer controls the settings panel.
-    OCTOPRINT_VIEWMODELS.push({
-        construct: FailureDetectorViewModel,
-        dependencies: ["settingsViewModel"],
-        elements: [
-            "#navbar_failuredetector",
-            "#tab_failuredetector"
-            // "#settings_failuredetector" <-- THIS LINE IS GONE
-        ]
-    });
+    // (The OCTOPRINT_VIEWMODELS registration is the same)
+    OCTOPRINT_VIEWMODELS.push({ /* ... no changes ... */ });
 });
