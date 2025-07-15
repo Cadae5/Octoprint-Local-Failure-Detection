@@ -109,10 +109,11 @@ class FailureDetectorPlugin(
                 if not self.is_printing: break
                 time.sleep(1)
 
+ # In __init__.py
+
     def perform_check(self):
         self._logger.info("--- Starting Perform Check ---")
         
-        # Guard Clause: Immediately stop if the model isn't loaded correctly.
         if not self.interpreter or not self.input_details:
             self._logger.error("Aborting check: The AI model was not loaded correctly on startup.")
             self._plugin_manager.send_plugin_message(self._identifier, dict(status="error", error="AI Model not loaded"))
@@ -143,11 +144,21 @@ class FailureDetectorPlugin(
             self._logger.info("Interpreter finished.")
             
             output_data = self.interpreter.get_tensor(self.output_details[0]['index'])
-            probability = np.squeeze(output_data)
-            failure_index = self.labels.index('failure')
-            failure_prob = probability[failure_index] if hasattr(probability, "__len__") else (probability if failure_index == 1 else 1 - probability)
-            confidence_threshold = self._settings.get_float(["failure_confidence"])
             
+            # --- THE CRITICAL FIX IS HERE ---
+            # Convert the 0D NumPy array to a simple Python float immediately.
+            scalar_prob = float(np.squeeze(output_data))
+
+            # By Keras/TF convention, a single output neuron with a sigmoid function
+            # gives the probability of the class at index 1.
+            # We check which label is at index 1 to see what this number means.
+            if self.labels[1] == 'failure':
+                failure_prob = scalar_prob
+            else: # This assumes the label at index 0 is 'failure'
+                failure_prob = 1.0 - scalar_prob
+            # --- END OF CRITICAL FIX ---
+
+            confidence_threshold = self._settings.get_float(["failure_confidence"])
             self._logger.info(f"AI analysis complete. Failure probability: {failure_prob:.2%}")
 
             if failure_prob > confidence_threshold:
@@ -163,14 +174,10 @@ class FailureDetectorPlugin(
             
             self._logger.info("--- Perform Check Finished ---")
 
-        except requests.exceptions.RequestException as e:
-            self._logger.error(f"A network error occurred: {e}")
-            self._plugin_manager.send_plugin_message(self._identifier, dict(status="error", error=f"Network Error: {e}"))
-        
         except Exception as e:
             self._logger.exception("An unexpected error occurred in perform_check. This is the traceback:")
             self._plugin_manager.send_plugin_message(self._identifier, dict(status="error", error=str(e)))
-
+            
     def get_update_information(self):
         return dict(
             failuredetector=dict(
