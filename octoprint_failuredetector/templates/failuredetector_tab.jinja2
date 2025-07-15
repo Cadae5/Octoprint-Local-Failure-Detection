@@ -1,37 +1,42 @@
-<!-- octoprint_failuredetector/templates/failuredetector_tab.jinja2 -->
+<!-- octoprint_failuredetector/templates/failuredetector_tab.jinja2 (Updated Layout) -->
 
-<div id="tab_failuredetector" class="container-fluid">
+<div id="tab_failuredetector">
+
+    <!-- Row 1: Webcam View, full width -->
     <div class="row-fluid">
-        <!-- Left Column: Webcam Feed -->
-        <div class="span6">
-            <div class="webcam_container" style="background-color: black;">
-                <!-- The 'src' of this image is bound to your webcam's STREAM url -->
-                <img data-bind="attr: { src: webcamStreamUrl }" style="width: 100%;" />
-            </div>
-        </div>
-
-        <!-- Right Column: Controls and Status -->
-        <div class="span6">
-            <h3>AI Failure Detector</h3>
-
-            <div class="well">
-                <h4>Status</h4>
-                <p>
-                    <i class="fa fa-eye" data-bind="style: { color: statusColor }, css: { 'fa-spin': isChecking }"></i>
-                    <strong data-bind="text: statusText"></strong>
-                </p>
-                <hr>
-                <h4>Last Check Result</h4>
-                <p data-bind="text: lastResultText"></p>
-            </div>
-
-            <div class="well">
-                <h4>Controls</h4>
-                <button class="btn btn-primary btn-block" data-bind="click: forceCheck, enable: !isChecking()">
-                    <i class="fa fa-camera"></i>
-                    Force Failure Check Now
-                </button>
+        <div class="span12">
+            <div class="webcam_container" style="background-color: black; margin-bottom: 10px;">
+                <!-- This displays the live webcam stream -->
+                <img data-bind="attr: { src: webcamStreamUrl }" style="width: 100%; border-radius: 4px;" />
             </div>
         </div>
     </div>
+
+    <!-- Row 2: Controls and Status, full width -->
+    <div class="row-fluid">
+        <div class="span12">
+            <h3>AI Failure Detector</h3>
+            <hr> <!-- Visual separator -->
+
+            <h4>Status</h4>
+            <p style="font-size: 1.2em;">
+                <i class="fa fa-eye" data-bind="style: { color: statusColor }, css: { 'fa-spin': isChecking }"></i>
+                <strong data-bind="text: statusText"></strong>
+            </p>
+
+            <hr> <!-- Visual separator -->
+            
+            <h4>Last Check Result</h4>
+            <p data-bind="text: lastResultText"></p>
+            
+            <hr> <!-- Visual separator -->
+
+            <h4>Controls</h4>
+            <button class="btn btn-primary btn-large btn-block" data-bind="click: forceCheck, enable: !isChecking()">
+                <i class="fa fa-camera"></i>
+                Force Failure Check Now
+            </button>
+        </div>
+    </div>
+
 </div>
