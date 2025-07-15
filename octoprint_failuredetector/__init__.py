@@ -116,66 +116,78 @@ class FailureDetectorPlugin(
 # In __init__.py
 
     def perform_check(self):
-        """Captures a webcam image, runs inference, and takes action."""
+        """
+        Captures a webcam image, runs inference, and takes action.
+        This version is heavily logged to debug silent failures.
+        """
+        self._logger.info("--- Starting Perform Check ---")
+        
+        # Immediately send 'checking' status to the UI
         self._plugin_manager.send_plugin_message(self._identifier, dict(status="checking"))
-        snapshot_url = self._settings.get(["webcam_snapshot_url"])
-
+        
+        snapshot_url = None # Initialize to None
         try:
-            # Step 1: Get the image and run the AI model
-            response = requests.get(snapshot_url, timeout=5)
-            response.raise_for_status()
+            # Step 1: Get the snapshot URL from settings
+            snapshot_url = self._settings.get(["webcam_snapshot_url"])
+            if not snapshot_url:
+                self._logger.error("Webcam Snapshot URL is not configured. Aborting check.")
+                self._plugin_manager.send_plugin_message(self._identifier, dict(status="error", error="Snapshot URL is not set"))
+                return
+
+            self._logger.info(f"Attempting to get image from: {snapshot_url}")
+
+            # Step 2: Get the image with a timeout
+            response = requests.get(snapshot_url, timeout=10) # Increased timeout to 10s
+            response.raise_for_status() # This will raise an error for 4xx or 5xx responses
+            self._logger.info("Successfully received image data.")
+
             image_bytes = BytesIO(response.content)
             image = Image.open(image_bytes).convert('RGB')
             
+            # Step 3: Run the AI model
+            self._logger.info("Preprocessing image for AI model...")
             _, height, width, _ = self.input_details[0]['shape']
             image_resized = image.resize((width, height))
             input_data = np.expand_dims(image_resized, axis=0)
             if self.input_details[0]['dtype'] == np.float32:
                 input_data = (np.float32(input_data) - 127.5) / 127.5
             
+            self._logger.info("Invoking TFLite interpreter...")
             self.interpreter.set_tensor(self.input_details[0]['index'], input_data)
             self.interpreter.invoke()
             output_data = self.interpreter.get_tensor(self.output_details[0]['index'])
+            self._logger.info("Interpreter finished.")
+
+            # Step 4: Process the results
             probability = np.squeeze(output_data)
-            
             failure_index = self.labels.index('failure')
             failure_prob = probability[failure_index] if hasattr(probability, "__len__") else (probability if failure_index == 1 else 1 - probability)
-
-            # Step 2: Decide what to do based on the result
             confidence_threshold = self._settings.get_float(["failure_confidence"])
 
-            if failure_prob > confidence_threshold:
-                # --- FAILURE LOGIC ---
-                # This block runs if the AI detects a failure, regardless of print status.
-                self._logger.warning(f"FAILURE DETECTED! (Confidence: {failure_prob:.2%})")
-                
-                # Report the failure to the UI so it turns red.
-                self._plugin_manager.send_plugin_message(
-                    self._identifier, 
-                    dict(status="failure", result=f"{failure_prob:.2%}", snapshot_url=snapshot_url)
-                )
+            self._logger.info(f"AI analysis complete. Failure probability: {failure_prob:.2%}")
 
-                # NOW, check if we should also pause the print.
+            # Step 5: Report status and take action
+            if failure_prob > confidence_threshold:
+                self._logger.warning(f"FAILURE DETECTED! (Confidence: {failure_prob:.2%})")
+                self._plugin_manager.send_plugin_message(self._identifier, dict(status="failure", result=f"{failure_prob:.2%}", snapshot_url=snapshot_url))
                 if self.is_printing:
                     self._logger.info("Print is active. Pausing print.")
                     self._printer.pause_print(reason="ai_failure_detection")
-                    self.is_printing = False # Stop further automatic checks
-                else:
-                    self._logger.info("Printer is not active. Not pausing.")
-
+                    self.is_printing = False
             else:
-                # --- SUCCESS LOGIC ---
-                # This block runs if the AI does NOT detect a failure.
-                self._logger.info(f"Failure check complete. Failure probability: {failure_prob:.2%}")
-                
-                # Report "idle" status to the UI so it returns to normal.
-                self._plugin_manager.send_plugin_message(
-                    self._identifier, 
-                    dict(status="idle", result=f"{failure_prob:.2%}", snapshot_url=snapshot_url)
-                )
+                self._logger.info("No failure detected.")
+                self._plugin_manager.send_plugin_message(self._identifier, dict(status="idle", result=f"{failure_prob:.2%}", snapshot_url=snapshot_url))
+            
+            self._logger.info("--- Perform Check Finished ---")
 
+        except requests.exceptions.RequestException as e:
+            # This will catch specific network errors like timeouts, DNS failures, etc.
+            self._logger.error(f"A network error occurred: {e}")
+            self._plugin_manager.send_plugin_message(self._identifier, dict(status="error", error=f"Network Error: {e}"))
+        
         except Exception as e:
-            self._logger.error(f"An unexpected error occurred during failure check: {e}")
+            # This is a critical addition. It will log the FULL traceback of any other error.
+            self._logger.exception("An unexpected error occurred in perform_check. This is the traceback:")
             self._plugin_manager.send_plugin_message(self._identifier, dict(status="error", error=str(e)))
             
     def get_update_information(self):
