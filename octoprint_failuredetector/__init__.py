@@ -75,7 +75,6 @@ class FailureDetectorPlugin(
     def get_api_commands(self):
         return dict(
             force_check=[],
-            save_settings=["snapshot_url", "interval", "confidence"]
         )
 
     def on_api_command(self, command, data):
@@ -84,13 +83,6 @@ class FailureDetectorPlugin(
             check_thread = threading.Thread(target=self.perform_check)
             check_thread.daemon = True
             check_thread.start()
-        elif command == "save_settings":
-            self._logger.info("Saving settings from plugin tab.")
-            self._settings.set(["webcam_snapshot_url"], data.get("snapshot_url"))
-            self._settings.set_int(["check_interval"], int(data.get("interval")))
-            self._settings.set_float(["failure_confidence"], float(data.get("confidence")))
-            self._settings.save()
-            self._plugin_manager.send_plugin_message(self._identifier, {"type": "settings_saved"})
 
     def on_event(self, event, payload):
         if event == "PrintStarted":
