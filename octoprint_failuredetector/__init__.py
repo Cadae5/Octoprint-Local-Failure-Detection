@@ -217,16 +217,3 @@ def __plugin_load__():
         "octoprint.plugin.softwareupdate.check_config": __plugin_implementation__.get_update_information
     }```
 
-### Next Steps
-
-1.  **Save the file** with the complete code above.
-2.  **Re-install the plugin** on your Pi to ensure OctoPrint sees the corrected file:
-    ```bash
-    pip install -e .
-    ```
-3.  **Restart the OctoPrint service:**
-    ```bash
-    sudo service octoprint restart
-    ```
-
-After these steps, the "incompatible" warning in the Plugin Manager should be gone, and the plugin should load and function correctly.
