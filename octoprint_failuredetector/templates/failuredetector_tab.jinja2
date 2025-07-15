@@ -1,32 +1,34 @@
-<!-- octoprint_failuredetector/templates/failuredetector_tab.jinja2 (Final Version) -->
+<!-- octoprint_failuredetector/templates/failuredetector_tab.jinja2 (All-in-One Version) -->
 
-<div id="tab_failuredetector">
-
+<div id="tab_failuredetector" class="container-fluid">
     <div class="row-fluid">
-        <div class="span12">
-            <!-- This container will now show a placeholder if no snapshot is available -->
+        <!-- Left Column: Snapshot & Controls -->
+        <div class="span6">
+            <h4>Latest Snapshot</h4>
             <div class="webcam_container" style="background-color: #222; margin-bottom: 10px; text-align: center; padding: 20px; border-radius: 4px;">
-                
-                <!-- This part shows ONLY if a snapshot URL exists -->
                 <!-- ko if: snapshotUrlWithCacheBuster -->
                 <img data-bind="attr: { src: snapshotUrlWithCacheBuster }" style="width: 100%; border-radius: 4px;" />
                 <!-- /ko -->
-
-                <!-- This part shows ONLY if NO snapshot URL exists yet -->
                 <!-- ko ifnot: snapshotUrlWithCacheBuster -->
-                <div style="color: #666; padding: 100px 0;">
-                    <i class="fa fa-camera fa-4x"></i>
-                    <p style="margin-top: 10px;">The latest snapshot will appear here after a check.</p>
-                </div>
+                <div style="color: #666; padding: 100px 0;"><i class="fa fa-camera fa-4x"></i><p style="margin-top: 10px;">Snapshot appears here after a check.</p></div>
                 <!-- /ko -->
-                
             </div>
+            <button class="btn btn-primary btn-block" data-bind="click: forceCheck, enable: !isChecking()"><i class="fa fa-camera"></i> Force Failure Check Now</button>
+        </div>
+
+        <!-- Right Column: Status & Settings -->
+        <div class="span6">
+            <h4>Status</h4>
+            <p><i class="fa fa-eye" data-bind="style: { color: statusColor }, css: { 'fa-spin': isChecking }"></i> <strong data-bind="text: statusText"></strong></p>
+            <p data-bind="text: lastResultText"></p>
+            <hr>
+            <h4>Settings</h4>
+            <form class="form-horizontal">
+                <div class="control-group"><label class="control-label">Snapshot URL</label><div class="controls"><input type="text" class="input-block-level" data-bind="value: tab_snapshot_url"></div></div>
+                <div class="control-group"><label class="control-label">Check Interval (s)</label><div class="controls"><input type="number" min="5" class="input-block-level" data-bind="value: tab_interval"></div></div>
+                <div class="control-group"><label class="control-label">Confidence Threshold</label><div class="controls"><input type="number" min="0.5" max="1.0" step="0.05" class="input-block-level" data-bind="value: tab_confidence"></div></div>
+            </form>
+            <button class="btn btn-success btn-block" data-bind="click: saveTabSettings"><i class="fa fa-save"></i> Save Settings</button>
         </div>
     </div>
-
-    <!-- (The rest of the file for controls and status remains unchanged) -->
-    <div class="row-fluid">
-        <!-- ... (the h3, hr, Status, Last Check, and Controls sections are the same) ... -->
-    </div>
-
 </div>
