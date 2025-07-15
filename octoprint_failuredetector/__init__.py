@@ -72,17 +72,22 @@ class FailureDetectorPlugin(
     def get_assets(self):
         return dict(js=["js/failuredetector.js", "js/failuredetector_settings.js"])
 
+    # --- THIS IS THE CRITICAL SECTION ---
     def get_api_commands(self):
+        # This tells OctoPrint that our plugin responds to a "force_check" command
         return dict(
-            force_check=[],
+            force_check=[]
         )
 
     def on_api_command(self, command, data):
+        # This function is called when the frontend sends the command
         if command == "force_check":
             self._logger.info("Forcing a manual failure check via API.")
+            # We run the check in a new thread to keep the UI responsive
             check_thread = threading.Thread(target=self.perform_check)
             check_thread.daemon = True
             check_thread.start()
+    # --- END OF CRITICAL SECTION ---
 
     def on_event(self, event, payload):
         if event == "PrintStarted":
@@ -109,6 +114,7 @@ class FailureDetectorPlugin(
                 time.sleep(1)
 
     def perform_check(self):
+        # This is the function that does the actual AI analysis
         self._plugin_manager.send_plugin_message(self._identifier, dict(status="checking"))
         snapshot_url = self._settings.get(["webcam_snapshot_url"])
         try:
@@ -150,8 +156,6 @@ class FailureDetectorPlugin(
         )
 
 __plugin_name__ = "AI Failure Detector"
-# --- THIS IS THE KEY CHANGE ---
-# This is compatible with Python 3.6, 3.7, 3.8, 3.9, etc.
 __plugin_pythoncompat__ = ">=3,<4"
 
 def __plugin_load__():
