@@ -1,17 +1,19 @@
-<!-- octoprint_failuredetector/templates/failuredetector_settings.jinja2 (With Test Button) -->
-
-<div id="settings_failuredetector">
-    <form class="form-horizontal">
-        <div class="control-group">
-            <label class="control-label">Webcam Snapshot URL</label>
-            <div class="controls">
-                <input type="text" class="input-block-level" data-bind="value: settings.plugins.failuredetector.webcam_snapshot_url">
-                <button class="btn" data-bind="click: testUrl" style="margin-top: 5px;"><i class="fa fa-bolt"></i> Test</button>
-                <span id="test_result_text" style="margin-left: 10px;"></span>
-            </div>
-        </div>
-        <!-- (The other settings fields remain the same) -->
-        <div class="control-group"><label class="control-label">Check Interval (s)</label><div class="controls"><input type="number" ...></div></div>
-        <div class="control-group"><label class="control-label">Confidence Threshold</label><div class="controls"><input type="number" ...></div></div>
-    </form>
+<!-- octoprint_failuredetector/templates/failuredetector_settings.jinja2 (Corrected) -->
+<div class="control-group">
+    <label class="control-label">Webcam Snapshot URL</label>
+    <div class="controls">
+        <input type="text" class="input-block-level" data-bind="value: settings.plugins.failuredetector.webcam_snapshot_url">
+    </div>
+</div>
+<div class="control-group">
+    <label class="control-label">Check Interval (seconds)</label>
+    <div class="controls">
+        <input type="number" min="5" class="input-block-level" data-bind="value: settings.plugins.failuredetector.check_interval">
+    </div>
+</div>
+<div class="control-group">
+    <label class="control-label">Failure Confidence Threshold</label>
+    <div class="controls">
+        <input type="number" min="0.5" max="1.0" step="0.05" class="input-block-level" data-bind="value: settings.plugins.failuredetector.failure_confidence">
+    </div>
 </div>
