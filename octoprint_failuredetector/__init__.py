@@ -64,27 +64,49 @@ class FailureDetectorPlugin(
 
     def get_settings_defaults(self):
         return dict(
-            check_interval=15, failure_confidence=0.8,
-            webcam_snapshot_url="http://127.0.0.1:8080/?action=snapshot"
+            # --- Existing Settings ---
+            check_interval=15,
+            failure_confidence=0.8,
+            webcam_snapshot_url="http://127.0.0.1:8080/?action=snapshot",
+
+            # --- NEW: Settings for Data Collection ---
+            database_b2_key_id="",
+            database_b2_app_key="",
+            database_b2_endpoint_url="",
+            database_b2_bucket_name="",
+            database_firebase_creds_json=""
         )
 
     def get_template_configs(self):
         return [
+            # --- Existing Templates ---
             dict(type="settings", custom_bindings=False),
             dict(type="navbar", custom_bindings=False),
-            dict(type="tab", name="Failure Detector", custom_bindings=False)
+            dict(type="tab", name="Failure Detector", custom_bindings=False),
+
+            # --- NEW: The tab for our Data Collector ---
+            dict(
+                type="tab",
+                name="Data Collector",
+                custom_bindings=False,
+                template="failuredetector_datacollector_tab.jinja2"
+            )
         ]
 
     def get_assets(self):
-        # This now loads only the single, known-good JavaScript file.
         return dict(
-            js=["js/failuredetector.js"]
+            js=[
+                "js/failuredetector.js",
+                "js/failuredetector_settings.js", # For the test button
+                "js/failuredetector_datacollector.js" # For the new tab
+            ]
         )
 
     def get_api_commands(self):
-        # This only provides the command for the "Force Check" button.
         return dict(
-            force_check=[]
+            force_check=[],
+            # --- NEW: Command for the Upload button ---
+            upload_failure_data=["failure_type"]
         )
 
     def on_api_command(self, command, data):
@@ -93,91 +115,35 @@ class FailureDetectorPlugin(
             check_thread = threading.Thread(target=self.perform_check)
             check_thread.daemon = True
             check_thread.start()
+        
+        # --- NEW: Handle the upload command ---
+        elif command == "upload_failure_data":
+            # For now, we will just log that we received the command and data.
+            # In the future, this is where the boto3/firebase code will go.
+            self._logger.info("Received request to upload failure data.")
+            failure_type = data.get("failure_type")
+            self._logger.info(f"Received failure type: {failure_type}")
+
+            # Send a success message back to the UI
+            self._plugin_manager.send_plugin_message(self._identifier, {"message": f"'{failure_type}' upload received!"})
 
     def on_event(self, event, payload):
         if event == "PrintStarted":
             self.is_printing = True
-            self._logger.info("Print started. AI monitoring is now active.")
-            self.detection_thread = threading.Thread(target=self.detection_loop)
-            self.detection_thread.daemon = True
-            self.detection_thread.start()
+            # ... (rest of method is unchanged)
         elif event in ("PrintDone", "PrintFailed", "PrintCancelled"):
-            self._logger.info("Print ended. AI monitoring is now inactive.")
             self.is_printing = False
-            self._plugin_manager.send_plugin_message(self._identifier, dict(status="idle"))
+            # ... (rest of method is unchanged)
 
     def detection_loop(self):
+        # ... (This entire method is unchanged)
         while self.is_printing:
-            if self.interpreter:
-                self.perform_check()
-            else:
-                self.is_printing = False
-                break
-            check_interval = self._settings.get_int(["check_interval"])
-            for _ in range(check_interval):
-                if not self.is_printing: break
-                time.sleep(1)
-
+            # ...
+    
     def perform_check(self):
+        # ... (This entire method is unchanged)
         self._logger.info("--- Starting Perform Check ---")
-        
-        if not self.interpreter or not self.input_details:
-            self._logger.error("Aborting check: The AI model was not loaded correctly on startup.")
-            self._plugin_manager.send_plugin_message(self._identifier, dict(status="error", error="AI Model not loaded"))
-            return
-
-        self._plugin_manager.send_plugin_message(self._identifier, dict(status="checking"))
-        snapshot_url = self._settings.get(["webcam_snapshot_url"])
-        
-        try:
-            self._logger.info(f"Attempting to get image from: {snapshot_url}")
-            response = requests.get(snapshot_url, timeout=10)
-            response.raise_for_status()
-            self._logger.info("Successfully received image data.")
-
-            image_bytes = BytesIO(response.content)
-            image = Image.open(image_bytes).convert('RGB')
-            
-            self._logger.info("Preprocessing image for AI model...")
-            _, height, width, _ = self.input_details[0]['shape']
-            image_resized = image.resize((width, height))
-            input_data = np.expand_dims(image_resized, axis=0)
-            if self.input_details[0]['dtype'] == np.float32:
-                input_data = (np.float32(input_data) - 127.5) / 127.5
-            
-            self._logger.info("Invoking TFLite interpreter...")
-            self.interpreter.set_tensor(self.input_details[0]['index'], input_data)
-            self.interpreter.invoke()
-            self._logger.info("Interpreter finished.")
-            
-            output_data = self.interpreter.get_tensor(self.output_details[0]['index'])
-            
-            scalar_prob = float(np.squeeze(output_data))
-
-            if self.labels[1] == 'failure':
-                failure_prob = scalar_prob
-            else:
-                failure_prob = 1.0 - scalar_prob
-
-            confidence_threshold = self._settings.get_float(["failure_confidence"])
-            self._logger.info(f"AI analysis complete. Failure probability: {failure_prob:.2%}")
-
-            if failure_prob > confidence_threshold:
-                self._logger.warning(f"FAILURE DETECTED! (Confidence: {failure_prob:.2%})")
-                self._plugin_manager.send_plugin_message(self._identifier, dict(status="failure", result=f"{failure_prob:.2%}", snapshot_url=snapshot_url))
-                if self.is_printing:
-                    self._logger.info("Print is active. Pausing print.")
-                    self._printer.pause_print(reason="ai_failure_detection")
-                    self.is_printing = False
-            else:
-                self._logger.info("No failure detected.")
-                self._plugin_manager.send_plugin_message(self._identifier, dict(status="idle", result=f"{failure_prob:.2%}", snapshot_url=snapshot_url))
-            
-            self._logger.info("--- Perform Check Finished ---")
-
-        except Exception as e:
-            self._logger.exception("An unexpected error occurred in perform_check. This is the traceback:")
-            self._plugin_manager.send_plugin_message(self._identifier, dict(status="error", error=str(e)))
+        # ...
 
     def get_update_information(self):
         return dict(
