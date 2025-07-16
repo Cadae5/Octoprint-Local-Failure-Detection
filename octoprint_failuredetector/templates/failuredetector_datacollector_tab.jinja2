@@ -1,0 +1,37 @@
+<!-- failuredetector_datacollector_tab.jinja2 -->
+
+<div id="datacollector_tab">
+    <div class="row-fluid">
+        <div class="span7">
+            <h4>Frame to Upload</h4>
+            <div class="webcam_container" style="background-color: #222; margin-bottom: 10px; text-align: center; padding: 20px; border-radius: 4px; min-height: 200px;">
+                <!-- This will show the latest snapshot, similar to the other tab -->
+                <!-- ko if: snapshotUrlWithCacheBuster -->
+                <img data-bind="attr: { src: snapshotUrlWithCacheBuster }" style="width: 100%; border-radius: 4px;" />
+                <!-- /ko -->
+                <!-- ko ifnot: snapshotUrlWithCacheBuster -->
+                <div style="color: #666; padding-top: 25%;">
+                    <i class="fa fa-camera fa-4x"></i>
+                    <p style="margin-top: 10px;">The latest snapshot will appear here.</p>
+                </div>
+                <!-- /ko -->
+            </div>
+        </div>
+
+        <div class="span5">
+            <h4>1. Classify the Failure</h4>
+            <div class="control-group">
+                <label for="failure_type_select">Select Failure Type:</label>
+                <select id="failure_type_select" class="input-block-level" data-bind="options: failureTypes, value: selectedFailureType"></select>
+            </div>
+            <hr>
+            <h4>2. Upload to Database</h4>
+            <button class="btn btn-primary btn-block" data-bind="click: uploadFailure, enable: uploadEnabled()">
+                <i class="fa fa-upload"></i> Upload Failure Data
+            </button>
+            <div class="text-center" style="margin-top: 10px;">
+                <strong data-bind="text: uploadStatus"></strong>
+            </div>
+        </div>
+    </div>
+</div>
