@@ -86,7 +86,7 @@ $(function() {
 
     // This binds our ViewModel to our UI elements.
     OCTOPRINT_VIEWMODELS.push({
-        construct: FailureDetectorViewModel,
+        construct: [FailureDetectorViewModel, "FailureDetectorViewModel"],
         dependencies: [],
         elements: ["#navbar_failuredetector", "#tab_failuredetector"]
     });
