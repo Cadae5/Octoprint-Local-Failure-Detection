@@ -1,18 +1,19 @@
-# __init__.py (Diagnostic Version 2 - Template Test)
+# __init__.py (Diagnostic Version 3 - Settings Template Test)
 
 import octoprint.plugin
 
-# We add TemplatePlugin back to the list of inherited classes
 class FailureDetectorPlugin(
     octoprint.plugin.StartupPlugin,
     octoprint.plugin.TemplatePlugin
 ):
     def on_after_startup(self):
-        self._logger.info("--- FailureDetector DIAGNOSTIC 2 has loaded. Testing TemplatePlugin. ---")
+        self._logger.info("--- FailureDetector DIAGNOSTIC 3 has loaded. Testing settings template. ---")
 
-    # This method is required by TemplatePlugin. We are keeping it empty for this test.
+    # This method now loads ONLY the settings template.
     def get_template_configs(self):
-        return []
+        return [
+            dict(type="settings", custom_bindings=False)
+        ]
 
 # --- All boilerplate is still required ---
 __plugin_name__ = "AI Failure Detector"
