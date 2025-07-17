@@ -98,7 +98,6 @@ class FailureDetectorPlugin(
             js=[
                 "js/failuredetector.js",
                 "js/failuredetector_settings.js", # For the test button
-                "js/failuredetector_datacollector.js" # For the new tab
             ]
         )
 
