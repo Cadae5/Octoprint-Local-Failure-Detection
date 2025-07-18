@@ -1,4 +1,4 @@
-<!-- octoprint_failuredetector/templates/failuredetector_tab.jinja2 (Final Functional Version) -->
+<!-- octoprint_failuredetector/templates/failuredetector_tab.jinja2 (Complete Version with Report Button) -->
 
 <div id="tab_failuredetector" class="container-fluid">
     <div class="row-fluid">
@@ -35,6 +35,11 @@
             <h4>Controls</h4>
             <button class="btn btn-primary btn-block" data-bind="click: forceCheck, enable: !isChecking()">
                 <i class="fa fa-camera"></i> Force Failure Check Now
+            </button>
+            <hr>
+            <h4>Report a Failure</h4>
+            <button class="btn btn-danger btn-block" data-bind="click: openFailureReportModal">
+                <i class="fa fa-flag"></i> Report Failure from Last Snapshot
             </button>
         </div>
     </div>
