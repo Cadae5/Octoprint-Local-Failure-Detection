@@ -1,0 +1,54 @@
+<!-- failuredetector_modal.jinja2 -->
+<div id="failure_report_modal" class="modal hide fade" tabindex="-1" role="dialog">
+    <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
+        <h3 data-bind="text: modalTitle">Report a Print Failure</h3>
+    </div>
+    <div class="modal-body">
+
+        <!-- Screen 1: "Did this print fail?" -->
+        <div data-bind="if: modalScreen() === 'confirm_failure'">
+            <h4>Did this print fail?</h4>
+            <p>Please review the final frame of your print.</p>
+            <img data-bind="attr: { src: snapshotUrlWithCacheBuster }" style="width: 100%; border-radius: 4px; margin-bottom: 15px;" />
+        </div>
+
+        <!-- Screen 2: "When did the failure start?" -->
+        <div data-bind="if: modalScreen() === 'select_frame'">
+            <h4>When did the failure start?</h4>
+            <p>Use the slider to select the first frame where the failure is visible.</p>
+            <!-- Placeholder for frame slider and image -->
+            <div style="background-color:#222; padding:20px; text-align:center; color:#666;">Frame Slider & Image Preview Area</div>
+            <hr>
+            <label>Failure Type:</label>
+            <select class="input-block-level" data-bind="options: failureTypes, value: selectedFailureType"></select>
+        </div>
+
+        <!-- Screen 3: "Draw Boxes over failure" -->
+        <div data-bind="if: modalScreen() === 'draw_boxes'">
+            <h4>Draw Boxes Over Failure Area</h4>
+            <p>Draw one or more boxes to highlight the failed parts of the print.</p>
+            <!-- Placeholder for the drawing canvas -->
+            <div style="background-color:#222; padding:20px; text-align:center; color:#666;">Interactive Drawing Canvas Area</div>
+            <button class="btn">New Box</button>
+            <button class="btn">Delete Box</button>
+        </div>
+
+        <!-- Screen 4: "Confirm and Submit" -->
+        <div data-bind="if: modalScreen() === 'final_confirm'">
+            <h4>Confirm and Submit</h4>
+            <p>Review the information below before submitting to the community database.</p>
+            <div style="background-color:#222; padding:20px; text-align:center; color:#666;">Final Frame w/ Boxes Preview</div>
+            <hr>
+            <label class="checkbox"><input type="checkbox" data-bind="checked: includePrintSettings"> Include print settings (temps, speeds, etc.)</label>
+            <label class="checkbox"><input type="checkbox" data-bind="checked: acceptDataUse"> I agree this data can be used for AI training.</label>
+        </div>
+
+    </div>
+    <div class="modal-footer">
+        <!-- The buttons will change based on the screen -->
+        <button class="btn" data-bind="click: modalBack" data-bind="visible: modalBackVisible">Back</button>
+        <button class="btn" data-dismiss="modal" aria-hidden="true">Cancel</button>
+        <button class="btn btn-primary" data-bind="click: modalConfirm, text: modalConfirmText, enable: modalConfirmEnabled"></button>
+    </div>
+</div>
