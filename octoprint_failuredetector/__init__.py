@@ -166,16 +166,16 @@ class FailureDetectorPlugin(
             response.raise_for_status()
             image_bytes = BytesIO(response.content)
             image = Image.open(image_bytes).convert('RGB')
-            _, height, width, _ = self.input_details[0]['shape']
+            _, height, width, _ = self.input_details['shape']
             image_resized = image.resize((width, height))
             input_data = np.expand_dims(image_resized, axis=0)
-            if self.input_details[0]['dtype'] == np.float32:
+            if self.input_details['dtype'] == np.float32:
                 input_data = (np.float32(input_data) - 127.5) / 127.5
-            self.interpreter.set_tensor(self.input_details[0]['index'], input_data)
+            self.interpreter.set_tensor(self.input_details['index'], input_data)
             self.interpreter.invoke()
-            output_data = self.interpreter.get_tensor(self.output_details[0]['index'])
+            output_data = self.interpreter.get_tensor(self.output_details['index'])
             scalar_prob = float(np.squeeze(output_data))
-            if self.labels[1] == 'failure':
+            if self.labels == 'failure':
                 failure_prob = scalar_prob
             else:
                 failure_prob = 1.0 - scalar_prob
@@ -236,18 +236,4 @@ def __plugin_load__():
     global __plugin_implementation__
     __plugin_implementation__ = FailureDetectorPlugin()
     global __plugin_hooks__
-    __plugin_hooks__ = {"octoprint.plugin.softwareupdate.check_config": __plugin_implementation__.get_update_information}```
-
-### Final Steps to Apply
-
-1.  **Save this complete code** to your `__init__.py` file.
-2.  **Re-install the plugin** to apply the corrected file:
-    ```bash
-    (oprint) RickyP@octopi:~ $ pip install -e .
-    ```
-3.  **Restart the OctoPrint service:**
-    ```bash
-    sudo service octoprint restart
-    ```
-
-The syntax error will now be gone, and the plugin will load correctly with the foundation for your new modal workflow. I am confident this will work.
+    __plugin_hooks__ = {"octoprint.plugin.softwareupdate.check_config": __plugin_implementation__.get_update_information}
