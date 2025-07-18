@@ -153,6 +153,8 @@ class FailureDetectorPlugin(
                 if not self.is_printing: break
                 time.sleep(1)
 
+# In __init__.py
+
     def perform_check(self):
         self._logger.info("--- Starting Perform Check ---")
         if not self.interpreter or not self.input_details:
@@ -166,16 +168,21 @@ class FailureDetectorPlugin(
             response.raise_for_status()
             image_bytes = BytesIO(response.content)
             image = Image.open(image_bytes).convert('RGB')
-            _, height, width, _ = self.input_details['shape']
+            
+            # --- THIS IS THE CORRECTED LOGIC ---
+            _, height, width, _ = self.input_details[0]['shape']
             image_resized = image.resize((width, height))
             input_data = np.expand_dims(image_resized, axis=0)
-            if self.input_details['dtype'] == np.float32:
+            if self.input_details[0]['dtype'] == np.float32:
                 input_data = (np.float32(input_data) - 127.5) / 127.5
-            self.interpreter.set_tensor(self.input_details['index'], input_data)
+            
+            self.interpreter.set_tensor(self.input_details[0]['index'], input_data)
             self.interpreter.invoke()
-            output_data = self.interpreter.get_tensor(self.output_details['index'])
+            output_data = self.interpreter.get_tensor(self.output_details[0]['index'])
+            # --- END OF CORRECTED LOGIC ---
+            
             scalar_prob = float(np.squeeze(output_data))
-            if self.labels == 'failure':
+            if len(self.labels) > 1 and self.labels[1] == 'failure':
                 failure_prob = scalar_prob
             else:
                 failure_prob = 1.0 - scalar_prob
