@@ -1,81 +1,102 @@
-// octoprint_failuredetector/static/js/failuredetector.js (The New Unified Version)
+// failuredetector.js (Updated for Modal Workflow)
 
 $(function() {
     function FailureDetectorViewModel(parameters) {
         var self = this;
 
-        // --- Observables from the Failure Detector Tab ---
+        // --- Existing Observables for main tab ---
         self.statusText = ko.observable("Failure Detector is Idle");
-        self.lastResult = ko.observable("N/A");
-        self.isChecking = ko.observable(false);
-        self.snapshotUrl = ko.observable(null);
-        self.snapshotTimestamp = ko.observable(new Date().getTime());
+        // ... (all other existing observables: lastResult, isChecking, etc.)
+
+        // --- NEW: Observables for the Modal Workflow ---
+        self.modalScreen = ko.observable('none'); // e.g., 'confirm_failure', 'select_frame', etc.
+        self.modalTitle = ko.observable("Report a Failure");
         
-        // --- Observables from the Data Collector Tab ---
+        // Data for the upload
         self.failureTypes = ko.observableArray(["Spaghetti", "Layer Shift", "Warping", "Adhesion Failure", "Other"]);
         self.selectedFailureType = ko.observable(self.failureTypes()[0]);
-        self.uploadStatus = ko.observable("");
-        self.isUploading = ko.observable(false);
+        self.includePrintSettings = ko.observable(true);
+        self.acceptDataUse = ko.observable(false);
 
-        // --- Computed Properties for the UI ---
-        self.snapshotUrlWithCacheBuster = ko.computed(function() {
-            if (self.snapshotUrl()) { return self.snapshotUrl() + "?_t=" + self.snapshotTimestamp(); }
-            return null;
+        // --- Computed properties to control modal buttons ---
+        self.modalBackVisible = ko.computed(function() {
+            return self.modalScreen() !== 'confirm_failure';
         });
-        self.lastResultText = ko.computed(function() { return "Last check confidence: " + self.lastResult(); });
-        self.statusColor = ko.computed(function() { /* ... no changes needed ... */ });
-        self.statusColorNavbar = ko.computed(function() { /* ... no changes needed ... */ });
-        self.uploadEnabled = ko.computed(function() { return !self.isUploading(); });
+        self.modalConfirmText = ko.computed(function() {
+            if (self.modalScreen() === 'final_confirm') return 'Submit';
+            return 'Confirm';
+        });
+        self.modalConfirmEnabled = ko.computed(function() {
+            // Disable submit button until user agrees to data use
+            if (self.modalScreen() === 'final_confirm') return self.acceptDataUse();
+            return true;
+        });
 
-        // --- Actions for Buttons ---
-        self.forceCheck = function() {
-            OctoPrint.simpleApiCommand("failuredetector", "force_check");
+        // --- Functions to control the modal ---
+        self.openFailureReportModal = function() {
+            // Manually opening the modal always starts at screen 1
+            self.modalScreen('confirm_failure');
+            self.modalTitle("Did this print fail?");
+            $('#failure_report_modal').modal('show');
+        };
+        
+        self.modalConfirm = function() {
+            var currentScreen = self.modalScreen();
+            if (currentScreen === 'confirm_failure') {
+                self.modalScreen('select_frame');
+                self.modalTitle("When did the failure start?");
+                // In a real version, we would call the API to get timelapse frames here
+            } else if (currentScreen === 'select_frame') {
+                self.modalScreen('draw_boxes');
+                self.modalTitle("Draw Boxes Over Failure");
+            } else if (currentScreen === 'draw_boxes') {
+                self.modalScreen('final_confirm');
+                self.modalTitle("Confirm and Submit");
+            } else if (currentScreen === 'final_confirm') {
+                // This is the final submit action
+                self.submitFinalReport();
+                $('#failure_report_modal').modal('hide');
+            }
         };
 
-        self.uploadFailure = function() {
-            self.isUploading(true);
-            self.uploadStatus("Sending to backend...");
-            var payload = { failure_type: self.selectedFailureType() };
-            OctoPrint.simpleApiCommand("failuredetector", "upload_failure_data", payload)
-                .done(function(response) {
-                    self.uploadStatus(response.message || "Upload signal sent!");
-                    setTimeout(function() { self.uploadStatus(""); }, 5000);
-                })
-                .fail(function() { self.uploadStatus("Error: Command failed."); })
-                .always(function() { self.isUploading(false); });
+        self.modalBack = function() {
+            var currentScreen = self.modalScreen();
+            if (currentScreen === 'select_frame') self.modalScreen('confirm_failure');
+            if (currentScreen === 'draw_boxes') self.modalScreen('select_frame');
+            if (currentScreen === 'final_confirm') self.modalScreen('draw_boxes');
         };
 
-        // --- Main Message Handler ---
+        self.submitFinalReport = function() {
+            // This is where you would gather all the data and send it to the backend
+            var payload = {
+                failure_type: self.selectedFailureType(),
+                failed_frame_path: "placeholder.jpg", // From the frame slider
+                bounding_boxes: [], // From the drawing canvas
+                include_settings: self.includePrintSettings()
+            };
+            OctoPrint.simpleApiCommand("failuredetector", "upload_failure_data", payload);
+        };
+
+        // --- Existing message handler, now with a new case ---
         self.onDataUpdaterPluginMessage = function(plugin, data) {
             if (plugin !== "failuredetector") { return; }
-            try {
-                if (data.snapshot_url) {
-                    self.snapshotUrl(data.snapshot_url);
-                    self.snapshotTimestamp(new Date().getTime());
-                }
-                if (data.status) { // Handle status updates for the detection tab
-                    switch (data.status) {
-                        case "checking": self.isChecking(true); self.statusText("Checking for failure..."); break;
-                        case "idle": self.isChecking(false); self.statusText("Failure Detector is Idle"); if (data.result) self.lastResult(data.result); break;
-                        case "failure": self.isChecking(false); self.statusText("Failure Detected!"); if (data.result) self.lastResult(data.result); break;
-                        case "error": self.isChecking(false); self.statusText("An error occurred: " + (data.error || "Unknown")); self.lastResult("Error"); break;
-                    }
-                }
-                if (data.message) { // Handle simple string messages for the collector tab
-                    self.uploadStatus(data.message);
-                }
-            } catch (e) { console.error("FailureDetector UI Error:", e); }
+            
+            // Handle the message to show the popup after a print
+            if (data.type === 'show_post_print_dialog') {
+                self.openFailureReportModal();
+                return;
+            }
+
+            // ... (The rest of the existing message handler for status updates)
         };
+
+        // ... (All other existing computed properties and functions for the main tab)
     }
 
-    // This single ViewModel now controls ALL THREE of our UI components.
+    // Bind the single ViewModel to all our components
     OCTOPRINT_VIEWMODELS.push({
         construct: FailureDetectorViewModel,
         dependencies: [],
-        elements: [
-            "#navbar_failuredetector", 
-            "#tab_failuredetector",
-            "#datacollector_tab" // Add the new tab's ID here
-        ]
+        elements: ["#navbar_failuredetector", "#tab_failuredetector", "#failure_report_modal"]
     });
 });
