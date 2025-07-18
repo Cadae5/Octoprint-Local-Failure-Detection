@@ -49,7 +49,6 @@ class FailureDetectorPlugin(
         self._logger.info("AI Failure Detector starting up...")
         if not TFLITE_AVAILABLE:
             self._logger.error("TensorFlow Lite runtime is not installed. AI features will be disabled.")
-            # We don't return here so the data collection can still work
         
         self._load_community_credentials()
         self.load_model()
@@ -65,7 +64,7 @@ class FailureDetectorPlugin(
 
     def load_model(self):
         if not TFLITE_AVAILABLE:
-            return # Don't try to load model if library is missing
+            return
 
         try:
             model_path = os.path.join(self._basefolder, "print_failure_model.tflite")
@@ -107,43 +106,13 @@ class FailureDetectorPlugin(
 
     def on_api_command(self, command, data):
         if command == "force_check":
-            upload_thread = threading.Thread(target=self.perform_check)
-            upload_thread.daemon = True
-            upload_thread.start()
+            check_thread = threading.Thread(target=self.perform_check)
+            check_thread.daemon = True
+            check_thread.start()
         elif command == "upload_failure_data":
             upload_thread = threading.Thread(target=self._upload_to_database, args=(data,))
             upload_thread.daemon = True
             upload_thread.start()
-
-    def _upload_to_database(self, data):
-        self._logger.info("Starting community database upload process...")
-        if not self.community_creds or not DATABASE_LIBS_AVAILABLE:
-            self._logger.error("Community credentials or database libraries not loaded. Aborting upload.")
-            self._plugin_manager.send_plugin_message(self._identifier, {"message": "Error: Backend not configured."})
-            return
-        try:
-            snapshot_url = self._settings.get(["webcam_snapshot_url"])
-            response = requests.get(snapshot_url, timeout=10)
-            response.raise_for_status()
-            image_bytes = BytesIO(response.content)
-            s3_client = boto3.client('s3',
-                endpoint_url=f"https://{self.community_creds['b2_endpoint_url']}",
-                aws_access_key_id=self.community_creds['b2_key_id'],
-                aws_secret_access_key=self.community_creds['b2_app_key'])
-            unique_filename = f"failure-{uuid.uuid4()}.jpg"
-            s3_client.upload_fileobj(image_bytes, self.community_creds['b2_bucket_name'], unique_filename)
-            image_public_url = f"https://{self.community_creds['b2_bucket_name']}.{self.community_creds['b2_endpoint_url']}/{unique_filename}"
-            if not firebase_admin._apps:
-                cred = credentials.Certificate(self.community_creds['firebase_creds'])
-                self.firebase_app = firebase_admin.initialize_app(cred)
-            db = firestore.client()
-            failure_doc = {'image_url': image_public_url, 'failure_type': data.get("failure_type"), 'timestamp': firestore.SERVER_TIMESTAMP, 'plugin_version': self._plugin_version}
-            db.collection('failures').add(failure_doc)
-            self._logger.info("Successfully uploaded data to community database.")
-            self._plugin_manager.send_plugin_message(self._identifier, {"message": "Upload successful!"})
-        except Exception as e:
-            self._logger.exception("An error occurred during community database upload:")
-            self._plugin_manager.send_plugin_message(self._identifier, {"message": f"Error: {e}"})
 
     def on_event(self, event, payload):
         if event == "PrintStarted":
@@ -167,7 +136,9 @@ class FailureDetectorPlugin(
                 if not self.is_printing: break
                 time.sleep(1)
 
+    # --- THIS IS THE CORRECT AI ANALYSIS FUNCTION ---
     def perform_check(self):
+        self._logger.info("--- Starting Perform Check ---")
         if not self.interpreter or not self.input_details:
             self._logger.error("Aborting check: AI model not loaded.")
             self._plugin_manager.send_plugin_message(self._identifier, dict(status="error", error="AI Model not loaded"))
@@ -178,6 +149,10 @@ class FailureDetectorPlugin(
             response = requests.get(snapshot_url, timeout=10)
             response.raise_for_status()
             image_bytes = BytesIO(response.content)
+            
+            # This is the line that was missing in the broken version
+            image = Image.open(image_bytes).convert('RGB')
+
             _, height, width, _ = self.input_details[0]['shape']
             image_resized = image.resize((width, height))
             input_data = np.expand_dims(image_resized, axis=0)
@@ -202,6 +177,41 @@ class FailureDetectorPlugin(
         except Exception as e:
             self._logger.exception("An unexpected error occurred in perform_check:")
             self._plugin_manager.send_plugin_message(self._identifier, dict(status="error", error=str(e)))
+
+    # --- THIS IS THE CORRECT DATABASE UPLOAD FUNCTION ---
+    def _upload_to_database(self, data):
+        self._logger.info("Starting community database upload process...")
+        if not self.community_creds or not DATABASE_LIBS_AVAILABLE:
+            self._logger.error("Community credentials or database libraries not loaded. Aborting upload.")
+            self._plugin_manager.send_plugin_message(self._identifier, {"message": "Error: Backend not configured."})
+            return
+        try:
+            snapshot_url = self._settings.get(["webcam_snapshot_url"])
+            response = requests.get(snapshot_url, timeout=10)
+            response.raise_for_status()
+            image_bytes = BytesIO(response.content) # We upload the bytes directly
+
+            s3_client = boto3.client('s3',
+                endpoint_url=f"https://{self.community_creds['b2_endpoint_url']}",
+                aws_access_key_id=self.community_creds['b2_key_id'],
+                aws_secret_access_key=self.community_creds['b2_app_key'])
+            unique_filename = f"failure-{uuid.uuid4()}.jpg"
+            s3_client.upload_fileobj(image_bytes, self.community_creds['b2_bucket_name'], unique_filename)
+            image_public_url = f"https://{self.community_creds['b2_bucket_name']}.{self.community_creds['b2_endpoint_url']}/{unique_filename}"
+            
+            if not firebase_admin._apps:
+                cred = credentials.Certificate(self.community_creds['firebase_creds'])
+                self.firebase_app = firebase_admin.initialize_app(cred)
+            db = firestore.client()
+
+            failure_doc = {'image_url': image_public_url, 'failure_type': data.get("failure_type"), 'timestamp': firestore.SERVER_TIMESTAMP, 'plugin_version': self._plugin_version}
+            db.collection('failures').add(failure_doc)
+
+            self._logger.info("Successfully uploaded data to community database.")
+            self._plugin_manager.send_plugin_message(self._identifier, {"message": "Upload successful!"})
+        except Exception as e:
+            self._logger.exception("An error occurred during community database upload:")
+            self._plugin_manager.send_plugin_message(self._identifier, {"message": f"Error: {e}"})
 
     def get_update_information(self):
         return dict(failuredetector=dict(
