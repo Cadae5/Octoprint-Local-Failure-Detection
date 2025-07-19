@@ -111,15 +111,32 @@ class FailureDetectorPlugin(
             ]
         )
 
+# In __init__.py
+
     def on_api_command(self, command, data):
         if command == "force_check":
             check_thread = threading.Thread(target=self.perform_check)
             check_thread.daemon = True
             check_thread.start()
         
+        # --- THIS IS THE NEW, WORKING IMPLEMENTATION ---
         elif command == "list_timelapse_frames":
-            self._logger.info("API call received for list_timelapse_frames. This feature is not yet implemented.")
-            self._plugin_manager.send_plugin_message(self._identifier, {"type": "frame_list", "frames": []})
+            self._logger.info("API call received to list timelapse frames.")
+            try:
+                # Get the folder where OctoPrint saves timelapses
+                timelapse_dir = self._settings.global_get_folder("timelapse")
+                
+                # Find all .jpg files, sort them by name
+                frames_full_path = sorted(glob.glob(os.path.join(timelapse_dir, "*.jpg")))
+                
+                # We only need the filename, not the full path
+                frame_filenames = [os.path.basename(p) for p in frames_full_path]
+                
+                self._logger.info(f"Found {len(frame_filenames)} timelapse frames.")
+                self._plugin_manager.send_plugin_message(self._identifier, {"type": "frame_list", "frames": frame_filenames})
+            except Exception as e:
+                self._logger.exception("Error listing timelapse frames:")
+                self._plugin_manager.send_plugin_message(self._identifier, {"type": "frame_list", "frames": [], "error": str(e)})
 
         elif command == "upload_failure_data":
             self._logger.info(f"Received upload request with data: {data}")
