@@ -1,46 +1,29 @@
-<!-- octoprint_failuredetector/templates/failuredetector_tab.jinja2 (Complete Version with Report Button) -->
-
+<!-- octoprint_failuredetector/templates/failuredetector_tab.jinja2 (Foundation Version) -->
 <div id="tab_failuredetector" class="container-fluid">
     <div class="row-fluid">
-        <!-- Left Column: The most recent frame -->
         <div class="span7">
             <h4>Latest Analyzed Frame</h4>
-            <div class="webcam_container" style="background-color: #222; margin-bottom: 10px; text-align: center; padding: 20px; border-radius: 4px; min-height: 200px;">
-                <!-- This 'ko if' block shows the image ONLY when a snapshot URL exists -->
+            <div class="webcam_container" style="background-color: #222; text-align: center; padding: 10px; border-radius: 4px; min-height: 200px;">
                 <!-- ko if: snapshotUrlWithCacheBuster -->
                 <img data-bind="attr: { src: snapshotUrlWithCacheBuster }" style="width: 100%; border-radius: 4px;" />
                 <!-- /ko -->
-                <!-- This 'ko ifnot' block shows the placeholder text -->
                 <!-- ko ifnot: snapshotUrlWithCacheBuster -->
-                <div style="color: #666; padding-top: 25%;">
-                    <i class="fa fa-camera fa-4x"></i>
-                    <p style="margin-top: 10px;">Snapshot appears here after a check.</p>
-                </div>
+                <div style="color: #666; padding-top: 25%;"><i class="fa fa-camera fa-4x"></i><p>Snapshot appears here.</p></div>
                 <!-- /ko -->
             </div>
         </div>
-
-        <!-- Right Column: Status, Confidence, and Controls -->
         <div class="span5">
             <h4>Status</h4>
-            <p style="font-size: 1.2em;">
-                <i class="fa fa-eye" data-bind="style: { color: statusColor }, css: { 'fa-spin': isChecking }"></i>
-                <strong data-bind="text: statusText"></strong>
-            </p>
+            <p style="font-size: 1.2em;"><i class="fa fa-eye" data-bind="style: { color: statusColor }, css: { 'fa-spin': isChecking }"></i> <strong data-bind="text: statusText"></strong></p>
             <hr>
             <h4>Most Recent Confidence</h4>
-            <!-- This paragraph will display the probability -->
             <p data-bind="text: lastResultText" style="font-size: 1.1em;"></p>
             <hr>
             <h4>Controls</h4>
-            <button class="btn btn-primary btn-block" data-bind="click: forceCheck, enable: !isChecking()">
-                <i class="fa fa-camera"></i> Force Failure Check Now
-            </button>
+            <button class="btn btn-primary btn-block" data-bind="click: forceCheck, enable: !isChecking()"> Force Failure Check</button>
             <hr>
             <h4>Report a Failure</h4>
-            <button class="btn btn-danger btn-block" data-bind="click: openFailureReportModal">
-                <i class="fa fa-flag"></i> Report Failure from Last Snapshot
-            </button>
+            <button class="btn btn-danger btn-block" data-bind="click: openFailureReportModal"> Report Failure from Last Snapshot</button>
         </div>
     </div>
 </div>
