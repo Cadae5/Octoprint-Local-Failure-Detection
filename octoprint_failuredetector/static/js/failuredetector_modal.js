@@ -1,11 +1,11 @@
-// octoprint_failuredetector/static/js/failuredetector_modal.js (The Definitive Reset Version)
+// octoprint_failuredetector/static/js/failuredetector_modal.js (The Modal Brain)
 
 $(function() {
     function FailureDetectorModalViewModel(parameters) {
         var self = this;
         console.log("FailureDetector MODAL ViewModel initializing...");
 
-        // --- All observables and computeds for the modal ---
+        // --- All the observables and computeds for the modal ---
         self.modalScreen = ko.observable('none');
         self.isFailureReport = ko.observable(true);
         self.failureTypes = ko.observableArray(["Spaghetti", "Layer Shift", "Warping", "Adhesion Failure", "Other"]);
@@ -14,7 +14,7 @@ $(function() {
         self.acceptDataUse = ko.observable(false);
         self.timelapseFrames = ko.observableArray([]);
         self.selectedFrameIndex = ko.observable(0);
-        self.lastSnapshotUrl = ko.observable(null); // To store the snapshot URL
+        self.lastSnapshotUrl = ko.observable(null);
         self.modalTitle = ko.computed(function() { /* ... */ });
         self.modalConfirmText = ko.computed(function() { /* ... */ });
         self.modalConfirmEnabled = ko.computed(function() { /* ... */ });
@@ -25,7 +25,7 @@ $(function() {
 
         // --- This function is called by the main ViewModel to open the modal ---
         self.open = function(snapshotUrl) {
-            console.log("JS Modal: 'open' called. Snapshot URL:", snapshotUrl);
+            console.log("JS Modal: 'open' function was called. Snapshot URL:", snapshotUrl);
             self.lastSnapshotUrl(snapshotUrl);
             self.modalScreen('confirm_failure');
             $('#failure_report_modal').modal('show');
@@ -47,8 +47,8 @@ $(function() {
         };
     }
 
+    // We give this ViewModel a name so the main one can find it.
     OCTOPRINT_VIEWMODELS.push({
-        // We give this ViewModel a name so the main one can find it.
         construct: [FailureDetectorModalViewModel, "plugin_viewmodel"],
         dependencies: [],
         elements: ["#failure_report_modal"]
