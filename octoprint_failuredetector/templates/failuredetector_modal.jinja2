@@ -1,4 +1,4 @@
-<!-- failuredetector_modal.jinja2 (Fully Implemented UI) -->
+<!-- failuredetector_modal.jinja2 (Definitive Reset Version) -->
 <div id="failure_report_modal" class="modal hide fade" tabindex="-1" role="dialog">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
@@ -7,55 +7,34 @@
     <div class="modal-body">
 
         <!-- Screen 1: "Did this print fail?" -->
-        <div data-bind="if: modalScreen() === 'confirm_failure'">
-            <!-- ... (This screen is unchanged) ... -->
-        </div>
-
-        <!-- Screen 2: "When did the failure start?" -->
-        <div data-bind="if: modalScreen() === 'select_frame'">
-            <h4>When did the failure start?</h4>
-            <p>Use the slider to select the first frame where the failure is visible.</p>
-            <!-- ko if: timelapseFrames().length > 0 -->
-            <img data-bind="attr: { src: selectedFrameUrl }" style="width: 100%; border-radius: 4px; background-color: #222;" />
-            <input type="range" class="input-block-level" style="margin-top: 15px;"
-                   data-bind="value: selectedFrameIndex, min: 0, max: timelapseFrames().length - 1, valueUpdate: 'input'">
-            <p class="text-center" data-bind="text: selectedFramePath"></p>
-            <!-- /ko -->
-            <!-- ko if: timelapseFrames().length === 0 -->
-            <div class="alert">Could not find any timelapse frames. Please ensure timelapse is enabled.</div>
-            <!-- /ko -->
-            <hr>
-            <label>Failure Type:</label>
-            <select class="input-block-level" data-bind="options: failureTypes, value: selectedFailureType"></select>
-        </div>
-
-        <!-- Screen 3: "Draw Boxes over failure" (Placeholder) -->
-        <div data-bind="if: modalScreen() === 'draw_boxes'">
-            <h4>Draw Boxes Over Failure Area (Future Feature)</h4>
-            <p>The ability to draw bounding boxes will be added in a future update. You can skip this step for now.</p>
-            <div style="background-color:#222; padding:20px; text-align:center; color:#666; border-radius: 4px;">
-                <img data-bind="attr: { src: selectedFrameUrl }" style="width: 100%;" />
+        <div data-bind="visible: modalScreen() === 'confirm_failure'">
+            <h4>Did this print fail?</h4>
+            <p>Please review the final frame of your print.</p>
+            <img data-bind="attr: { src: snapshotUrlWithCacheBuster }" style="width: 100%; border-radius: 4px; margin-bottom: 15px; background-color: #222;" />
+            <div class="text-center">
+                <button class="btn btn-success btn-large" style="width: 45%;" data-bind="click: reportNo">No, it was a Success</button>
+                <button class="btn btn-danger btn-large" style="width: 45%;" data-bind="click: reportYes">Yes, it Failed</button>
             </div>
-            <p class="text-center" style="margin-top:10px;">
-                <button class="btn" disabled>New Box</button>
-                <button class="btn" disabled>Delete Box</button>
-            </p>
         </div>
 
-        <!-- Screen 4: "Confirm and Submit" -->
-        <div data-bind="if: modalScreen() === 'final_confirm'">
-            <h4 data-bind="text: finalConfirmTitle"></h4>
-            <p>Review the information below before submitting.</p>
-            <div style="background-color:#222; padding:20px; text-align:center; color:#666; border-radius: 4px;">
-                <img data-bind="attr: { src: selectedFrameUrl }" style="width: 100%;" />
-            </div>
-            <p class="text-center" data-bind="text: finalFailureTypeText"></p>
-            <hr>
-            <label class="checkbox"><input type="checkbox" data-bind="checked: includePrintSettings"> Include print settings (temps, speeds, etc.)</label>
-            <label class="checkbox"><input type="checkbox" data-bind="checked: acceptDataUse"> I agree this data can be used for AI training.</label>
+        <!-- All other screens are just placeholders for now -->
+        <div data-bind="visible: modalScreen() === 'select_frame'">
+            <h4>Step 2: Select Frame</h4>
+            <div class="alert alert-info">This feature is under construction.</div>
         </div>
+        <div data-bind="visible: modalScreen() === 'draw_boxes'">
+            <h4>Step 3: Draw Boxes</h4>
+            <div class="alert alert-info">This feature is under construction.</div>
+        </div>
+        <div data-bind="visible: modalScreen() === 'final_confirm'">
+            <h4>Step 4: Confirm & Submit</h4>
+            <div class="alert alert-info">This feature is under construction.</div>
+        </div>
+
     </div>
     <div class="modal-footer" data-bind="visible: modalScreen() !== 'confirm_failure'">
-        <!-- ... (This footer is unchanged) ... -->
+        <button class="btn" data-bind="click: modalBack">Back</button>
+        <button class="btn" data-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary" data-bind="click: modalConfirm, text: modalConfirmText"></button>
     </div>
 </div>
