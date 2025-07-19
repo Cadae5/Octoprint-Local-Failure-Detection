@@ -99,12 +99,13 @@ class FailureDetectorPlugin(
         ]
 
     def get_assets(self):
-    return dict(
-        js=[
-            "js/failuredetector.js",
-            "js/failuredetector_modal.js" # Add the new file
-        ]
-    )
+        # This is the corrected method that loads BOTH required JavaScript files.
+        return dict(
+            js=[
+                "js/failuredetector.js",
+                "js/failuredetector_modal.js"
+            ]
+        )
 
     def get_api_commands(self):
         return dict(
@@ -116,27 +117,18 @@ class FailureDetectorPlugin(
             ]
         )
 
-# In __init__.py
-
     def on_api_command(self, command, data):
         if command == "force_check":
             check_thread = threading.Thread(target=self.perform_check)
             check_thread.daemon = True
             check_thread.start()
         
-        # --- THIS IS THE NEW, WORKING IMPLEMENTATION ---
         elif command == "list_timelapse_frames":
             self._logger.info("API call received to list timelapse frames.")
             try:
-                # Get the folder where OctoPrint saves timelapses
                 timelapse_dir = self._settings.global_get_folder("timelapse")
-                
-                # Find all .jpg files, sort them by name
                 frames_full_path = sorted(glob.glob(os.path.join(timelapse_dir, "*.jpg")))
-                
-                # We only need the filename, not the full path
                 frame_filenames = [os.path.basename(p) for p in frames_full_path]
-                
                 self._logger.info(f"Found {len(frame_filenames)} timelapse frames.")
                 self._plugin_manager.send_plugin_message(self._identifier, {"type": "frame_list", "frames": frame_filenames})
             except Exception as e:
@@ -175,8 +167,6 @@ class FailureDetectorPlugin(
                 if not self.is_printing: break
                 time.sleep(1)
 
-# In __init__.py
-
     def perform_check(self):
         self._logger.info("--- Starting Perform Check ---")
         if not self.interpreter or not self.input_details:
@@ -190,19 +180,14 @@ class FailureDetectorPlugin(
             response.raise_for_status()
             image_bytes = BytesIO(response.content)
             image = Image.open(image_bytes).convert('RGB')
-            
-            # --- THIS IS THE CORRECTED LOGIC ---
             _, height, width, _ = self.input_details[0]['shape']
             image_resized = image.resize((width, height))
             input_data = np.expand_dims(image_resized, axis=0)
             if self.input_details[0]['dtype'] == np.float32:
                 input_data = (np.float32(input_data) - 127.5) / 127.5
-            
             self.interpreter.set_tensor(self.input_details[0]['index'], input_data)
             self.interpreter.invoke()
             output_data = self.interpreter.get_tensor(self.output_details[0]['index'])
-            # --- END OF CORRECTED LOGIC ---
-            
             scalar_prob = float(np.squeeze(output_data))
             if len(self.labels) > 1 and self.labels[1] == 'failure':
                 failure_prob = scalar_prob
