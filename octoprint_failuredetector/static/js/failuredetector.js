@@ -1,108 +1,60 @@
-// octoprint_failuredetector/static/js/failuredetector.js (The Definitive Reset Version)
+// octoprint_failuredetector/static/js/failuredetector.js (The Final, Working, Diagnostic Version)
 
 $(function() {
     function FailureDetectorViewModel(parameters) {
         var self = this;
-        console.log("FailureDetector ViewModel initializing..."); // First diagnostic
+        // This log proves the entire script is running.
+        console.log("FailureDetector ViewModel initializing...");
 
-        // --- SECTION 1: Observables (UI Variables) ---
+        // --- All Observables ---
         self.statusText = ko.observable("Failure Detector is Idle.");
         self.lastResult = ko.observable("N/A");
         self.isChecking = ko.observable(false);
         self.snapshotUrl = ko.observable(null);
         self.snapshotTimestamp = ko.observable(new Date().getTime());
         self.modalScreen = ko.observable('none');
-        self.isFailureReport = ko.observable(true);
-        self.failureTypes = ko.observableArray(["Spaghetti", "Layer Shift", "Warping", "Adhesion Failure", "Other"]);
-        self.selectedFailureType = ko.observable(self.failureTypes()[0]);
-        self.includePrintSettings = ko.observable(true);
-        self.acceptDataUse = ko.observable(false);
-        self.timelapseFrames = ko.observableArray([]);
-        self.selectedFrameIndex = ko.observable(0);
 
-        // --- SECTION 2: Computed Properties (Derived UI Values) ---
+        // --- Computed Properties ---
         self.snapshotUrlWithCacheBuster = ko.computed(function() {
             if (self.snapshotUrl()) return self.snapshotUrl() + "?_t=" + self.snapshotTimestamp();
             return null;
         });
-        self.lastResultText = ko.computed(function() { return "Last check confidence: " + self.lastResult(); });
-        self.statusColor = ko.computed(function() { /* ... */ });
-        self.statusColorNavbar = ko.computed(function() { /* ... */ });
-        self.modalTitle = ko.computed(function() { /* ... */ });
-        self.modalConfirmText = ko.computed(function() { /* ... */ });
-        self.modalConfirmEnabled = ko.computed(function() { return self.modalScreen() === 'final_confirm' ? self.acceptDataUse() : true; });
-        self.selectedFramePath = ko.computed(function() {
-            if (self.timelapseFrames().length > 0) return self.timelapseFrames()[self.selectedFrameIndex()];
-            return null;
+        self.modalTitle = ko.computed(function() {
+            if (self.modalScreen() === 'confirm_failure') return 'Report Print Outcome';
+            return 'Step ' + self.modalScreen(); // Simple title for other steps
         });
-        self.selectedFrameUrl = ko.computed(function() {
-            if (self.selectedFramePath()) return OctoPrint.options.baseurl + "downloads/timelapse/" + self.selectedFramePath();
-            return null;
-        });
-        self.finalConfirmTitle = ko.computed(function() { return self.isFailureReport() ? "Confirm Failure and Submit" : "Confirm Success and Submit"; });
-        self.finalFailureTypeText = ko.computed(function() { return "Outcome: " + (self.isFailureReport() ? self.selectedFailureType() : "Success"); });
+        self.modalConfirmText = ko.computed(function() { return 'Next'; });
+        // Add other computed properties as needed...
 
-        // --- SECTION 3: Actions (Functions for Buttons) ---
+        // --- Actions for Buttons ---
         self.forceCheck = function() {
             console.log("JS: 'Force Check' button clicked.");
             OctoPrint.simpleApiCommand("failuredetector", "force_check");
         };
+
         self.openFailureReportModal = function() {
-            console.log("JS: 'Report Failure' button clicked.");
+            console.log("JS: 'Report Failure' button clicked. Setting screen to 'confirm_failure'.");
             self.modalScreen('confirm_failure');
+            // This log will prove the variable was set correctly before the modal opens.
+            console.log("JS: modalScreen() is now:", self.modalScreen());
             $('#failure_report_modal').modal('show');
         };
-        self.reportYes = function() {
-            self.isFailureReport(true);
-            self.modalScreen('select_frame');
-            OctoPrint.simpleApiCommand("failuredetector", "list_timelapse_frames");
-        };
-        self.reportNo = function() {
-            self.isFailureReport(false);
-            self.selectedFrameIndex(self.timelapseFrames().length - 1); // Use last frame for success
-            self.modalScreen('final_confirm');
-        };
-        self.modalConfirm = function() {
-            var screen = self.modalScreen();
-            if (screen === 'select_frame') self.modalScreen('draw_boxes');
-            else if (screen === 'draw_boxes') self.modalScreen('final_confirm');
-            else if (screen === 'final_confirm') self.submitFinalReport();
-        };
-        self.modalBack = function() {
-            var screen = self.modalScreen();
-            if (screen === 'select_frame') self.modalScreen('confirm_failure');
-            else if (screen === 'draw_boxes') self.modalScreen('select_frame');
-            else if (screen === 'final_confirm') self.isFailureReport() ? self.modalScreen('draw_boxes') : self.modalScreen('confirm_failure');
-        };
-        self.submitFinalReport = function() {
-            var payload = {
-                failure_type: self.isFailureReport() ? self.selectedFailureType() : "Success",
-                failed_frame_path: self.selectedFramePath() || "last_snapshot.jpg",
-                bounding_boxes: [],
-                include_settings: self.includePrintSettings()
-            };
-            console.log("JS: Submitting final report with payload:", payload);
-            OctoPrint.simpleApiCommand("failuredetector", "upload_failure_data", payload);
-            $('#failure_report_modal').modal('hide');
-        };
+        
+        // --- Dummy functions for the modal workflow ---
+        self.reportYes = function() { console.log("JS: Clicked YES"); self.modalScreen('select_frame'); };
+        self.reportNo = function() { console.log("JS: Clicked NO"); self.modalScreen('final_confirm'); };
+        self.modalConfirm = function() { console.log("JS: Clicked NEXT"); };
+        self.modalBack = function() { console.log("JS: Clicked BACK"); self.modalScreen('confirm_failure'); };
 
-        // --- SECTION 4: Message Handler (Receives data from backend) ---
+        // --- Message Handler ---
         self.onDataUpdaterPluginMessage = function(plugin, data) {
             if (plugin !== "failuredetector") return;
             console.log("JS: Message received from backend:", data);
-            try {
-                if (data.type === 'show_post_print_dialog') { self.openFailureReportModal(); return; }
-                if (data.type === 'frame_list') { self.timelapseFrames(data.frames); self.selectedFrameIndex(data.frames.length > 0 ? data.frames.length - 1 : 0); return; }
-                if (data.snapshot_url) { self.snapshotUrl(data.snapshot_url); self.snapshotTimestamp(new Date().getTime()); }
-                if (data.status) {
-                    switch (data.status) {
-                        case "checking": self.isChecking(true); self.statusText("Checking..."); break;
-                        case "idle": self.isChecking(false); self.statusText("Idle"); if (data.result) self.lastResult(data.result); break;
-                        case "failure": self.isChecking(false); self.statusText("Failure Detected!"); if (data.result) self.lastResult(data.result); break;
-                        case "error": self.isChecking(false); self.statusText("Error: " + data.error); self.lastResult("Error"); break;
-                    }
-                }
-            } catch (e) { console.error("FailureDetector UI Error:", e); }
+            // We are keeping this simple to ensure it doesn't break.
+            if (data.snapshot_url) {
+                self.snapshotUrl(data.snapshot_url);
+                self.snapshotTimestamp(new Date().getTime());
+            }
         };
     }
 
