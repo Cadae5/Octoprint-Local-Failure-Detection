@@ -99,7 +99,12 @@ class FailureDetectorPlugin(
         ]
 
     def get_assets(self):
-        return dict(js=["js/failuredetector.js"])
+    return dict(
+        js=[
+            "js/failuredetector.js",
+            "js/failuredetector_modal.js" # Add the new file
+        ]
+    )
 
     def get_api_commands(self):
         return dict(
