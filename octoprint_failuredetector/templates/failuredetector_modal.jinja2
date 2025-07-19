@@ -1,66 +1,40 @@
-// octoprint_failuredetector/static/js/failuredetector_modal.js
+<!-- failuredetector_modal.jinja2 (Definitive Reset Version) -->
+<div id="failure_report_modal" class="modal hide fade" tabindex="-1" role="dialog">
+    <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
+        <h3 data-bind="text: modalTitle">Report Print Outcome</h3>
+    </div>
+    <div class="modal-body">
 
-$(function() {
-    function FailureDetectorModalViewModel(parameters) {
-        var self = this;
-        console.log("FailureDetector MODAL ViewModel initializing...");
+        <!-- Screen 1: "Did this print fail?" -->
+        <div data-bind="visible: modalScreen() === 'confirm_failure'">
+            <h4>Did this print fail?</h4>
+            <p>Please review the final frame of your print.</p>
+            <img data-bind="attr: { src: snapshotUrlWithCacheBuster }" style="width: 100%; border-radius: 4px; margin-bottom: 15px; background-color: #222;" />
+            <div class="text-center">
+                <button class="btn btn-success btn-large" style="width: 45%;" data-bind="click: reportNo">No, it was a Success</button>
+                <button class="btn btn-danger btn-large" style="width: 45%;" data-bind="click: reportYes">Yes, it Failed</button>
+            </div>
+        </div>
 
-        // --- Observables for the Modal Workflow ---
-        self.modalScreen = ko.observable('none');
-        self.isFailureReport = ko.observable(true);
-        self.failureTypes = ko.observableArray(["Spaghetti", "Layer Shift", "Warping", "Adhesion Failure", "Other"]);
-        self.selectedFailureType = ko.observable(self.failureTypes()[0]);
-        self.includePrintSettings = ko.observable(true);
-        self.acceptDataUse = ko.observable(false);
-        self.timelapseFrames = ko.observableArray([]);
-        self.selectedFrameIndex = ko.observable(0);
-        self.lastSnapshotUrl = ko.observable(null); // To store the snapshot URL
+        <!-- All other screens are just placeholders for now -->
+        <div data-bind="visible: modalScreen() === 'select_frame'">
+            <h4>Step 2: Select Frame</h4>
+            <div class="alert alert-info">This feature is under construction.</div>
+        </div>
+        <div data-bind="visible: modalScreen() === 'draw_boxes'">
+            <h4>Step 3: Draw Boxes</h4>
+            <div class="alert alert-info">This feature is under construction.</div>
+        </div>
+        <div data-bind="visible: modalScreen() === 'final_confirm'">
+            <h4>Step 4: Confirm & Submit</h4>
+            <div class="alert alert-info">This feature is under construction.</div>
+        </div>
 
-        // --- Computed Properties for the Modal UI ---
-        self.modalTitle = ko.computed(function() { /* ... unchanged ... */ });
-        self.modalConfirmText = ko.computed(function() { /* ... unchanged ... */ });
-        self.modalConfirmEnabled = ko.computed(function() { return self.modalScreen() === 'final_confirm' ? self.acceptDataUse() : true; });
-        self.selectedFramePath = ko.computed(function() { /* ... unchanged ... */ });
-        self.selectedFrameUrl = ko.computed(function() { /* ... unchanged ... */ });
-        self.finalConfirmTitle = ko.computed(function() { /* ... unchanged ... */ });
-        self.finalFailureTypeText = ko.computed(function() { /* ... unchanged ... */ });
-        
-        // --- This function is called from other ViewModels to open the modal ---
-        self.open = function(snapshotUrl) {
-            console.log("JS Modal: 'open' called. Snapshot URL:", snapshotUrl);
-            self.lastSnapshotUrl(snapshotUrl);
-            self.modalScreen('confirm_failure');
-            $('#failure_report_modal').modal('show');
-        };
-
-        // --- Actions for Buttons within the modal ---
-        self.reportYes = function() { self.isFailureReport(true); self.modalScreen('select_frame'); OctoPrint.simpleApiCommand("failuredetector", "list_timelapse_frames"); };
-        self.reportNo = function() { self.isFailureReport(false); self.selectedFrameIndex(self.timelapseFrames().length - 1); self.modalScreen('final_confirm'); };
-        self.modalConfirm = function() { /* ... unchanged ... */ };
-        self.modalBack = function() { /* ... unchanged ... */ };
-        self.submitFinalReport = function() { /* ... unchanged ... */ };
-
-        // --- Message Handler for this ViewModel ---
-        self.onDataUpdaterPluginMessage = function(plugin, data) {
-            if (plugin !== "failuredetector") return;
-            // This handler only cares about the frame list
-            if (data.type === 'frame_list') {
-                console.log("JS Modal: Received frame list.", data.frames);
-                self.timelapseFrames(data.frames);
-                self.selectedFrameIndex(data.frames.length > 0 ? data.frames.length - 1 : 0);
-            }
-        };
-
-        // This allows other ViewModels to call our 'open' function
-        self.onViewModelsInitialized = function() {
-            self.callViewModel = parameters[0].callViewModel;
-        };
-    }
-
-    // Bind this ViewModel ONLY to the modal element
-    OCTOPRINT_VIEWMODELS.push({
-        construct: [FailureDetectorModalViewModel, ["plugin_viewmodel"]],
-        dependencies: [],
-        elements: ["#failure_report_modal"]
-    });
-});
+    </div>
+    <div class="modal-footer" data-bind="visible: modalScreen() !== 'confirm_failure'">
+        <button class="btn" data-bind="click: modalBack">Back</button>
+        <button class="btn" data-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary" data-bind="click: modalConfirm, text: modalConfirmText"></button>
+    </div>
+</div>
