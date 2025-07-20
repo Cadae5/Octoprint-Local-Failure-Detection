@@ -1,29 +1,27 @@
-<!-- octoprint_failuredetector/templates/failuredetector_tab.jinja2 (Foundation Version) -->
-<div id="tab_failuredetector" class="container-fluid">
-    <div class="row-fluid">
-        <div class="span7">
-            <h4>Latest Analyzed Frame</h4>
-            <div class="webcam_container" style="background-color: #222; text-align: center; padding: 10px; border-radius: 4px; min-height: 200px;">
-                <!-- ko if: snapshotUrlWithCacheBuster -->
-                <img data-bind="attr: { src: snapshotUrlWithCacheBuster }" style="width: 100%; border-radius: 4px;" />
-                <!-- /ko -->
-                <!-- ko ifnot: snapshotUrlWithCacheBuster -->
-                <div style="color: #666; padding-top: 25%;"><i class="fa fa-camera fa-4x"></i><p>Snapshot appears here.</p></div>
-                <!-- /ko -->
-            </div>
-        </div>
-        <div class="span5">
-            <h4>Status</h4>
-            <p style="font-size: 1.2em;"><i class="fa fa-eye" data-bind="style: { color: statusColor }, css: { 'fa-spin': isChecking }"></i> <strong data-bind="text: statusText"></strong></p>
-            <hr>
-            <h4>Most Recent Confidence</h4>
-            <p data-bind="text: lastResultText" style="font-size: 1.1em;"></p>
-            <hr>
-            <h4>Controls</h4>
-            <button class="btn btn-primary btn-block" data-bind="click: forceCheck, enable: !isChecking()"> Force Failure Check</button>
-            <hr>
-            <h4>Report a Failure</h4>
-            <button class="btn btn-danger btn-block" data-bind="click: openFailureReportModal"> Report Failure from Last Snapshot</button>
-        </div>
+<!-- --- NEW: Section for Recorded Timelapses --- -->
+<div class="row-fluid" style="margin-top: 20px;">
+    <div class="span12">
+        <h3>Recorded Timelapses</h3>
+        <table class="table table-striped table-hover">
+            <thead>
+                <tr>
+                    <th>Filename</th>
+                    <th>Size (MB)</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody data-bind="foreach: recordedTimelapses">
+                <tr>
+                    <td data-bind="text: name"></td>
+                    <td data-bind="text: size_mb"></td>
+                    <td>
+                        <button class="btn btn-primary" data-bind="click: $parent.reportFailureForTimelapse">
+                            <i class="fa fa-flag"></i> Report Outcome
+                        </button>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+        <button class="btn" data-bind="click: refreshTimelapseList"><i class="fa fa-refresh"></i> Refresh List</button>
     </div>
 </div>
