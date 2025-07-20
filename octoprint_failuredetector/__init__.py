@@ -99,12 +99,8 @@ class FailureDetectorPlugin(
         ]
 
     def get_assets(self):
-        # This is the corrected method that loads BOTH required JavaScript files.
         return dict(
-            js=[
-                "js/failuredetector.js",
-                "js/failuredetector_modal.js"
-            ]
+            js=["js/failuredetector.js"]
         )
 
     def get_api_commands(self):
