@@ -201,36 +201,73 @@ class FailureDetectorPlugin(
             self._logger.exception("An unexpected error occurred in perform_check:")
             self._plugin_manager.send_plugin_message(self._identifier, dict(status="error", error=str(e)))
 
+# In __init__.py
+
+    # This is the new, upgraded upload function.
     def _upload_to_database(self, data):
-        self._logger.info("Starting community database upload process...")
+        self._logger.info("Starting community database upload process with detailed data...")
         if not self.community_creds or not DATABASE_LIBS_AVAILABLE:
             self._logger.error("Community credentials or database libraries not loaded. Aborting upload.")
             self._plugin_manager.send_plugin_message(self._identifier, {"message": "Error: Backend not configured."})
             return
+            
         try:
-            snapshot_url = self._settings.get(["webcam_snapshot_url"])
-            response = requests.get(snapshot_url, timeout=10)
-            response.raise_for_status()
-            image_bytes = BytesIO(response.content)
+            # Step 1: Find the correct image file on disk.
+            failed_frame_filename = data.get("failed_frame_path")
+            if not failed_frame_filename:
+                self._logger.error("No failed frame filename was provided.")
+                self._plugin_manager.send_plugin_message(self._identifier, {"message": "Error: No frame specified."})
+                return
+
+            timelapse_dir = self._settings.global_get_folder("timelapse")
+            full_path_to_image = os.path.join(timelapse_dir, failed_frame_filename)
+
+            if not os.path.exists(full_path_to_image):
+                self._logger.error(f"Cannot find specified frame on disk: {full_path_to_image}")
+                self._plugin_manager.send_plugin_message(self._identifier, {"message": "Error: Frame not found."})
+                return
+
+            # Step 2: Connect to Backblaze B2
             s3_client = boto3.client('s3',
                 endpoint_url=f"https://{self.community_creds['b2_endpoint_url']}",
                 aws_access_key_id=self.community_creds['b2_key_id'],
                 aws_secret_access_key=self.community_creds['b2_app_key'])
-            unique_filename = f"failure-{uuid.uuid4()}.jpg"
-            s3_client.upload_fileobj(image_bytes, self.community_creds['b2_bucket_name'], unique_filename)
+            
+            unique_filename = f"{data.get('failure_type', 'unknown')}-{uuid.uuid4()}.jpg"
+
+            # Step 3: Upload the image from the file path
+            with open(full_path_to_image, "rb") as f:
+                s3_client.upload_fileobj(f, self.community_creds['b2_bucket_name'], unique_filename)
+            
             image_public_url = f"https://{self.community_creds['b2_bucket_name']}.{self.community_creds['b2_endpoint_url']}/{unique_filename}"
+            self._logger.info(f"Successfully uploaded image to B2: {image_public_url}")
+
+            # Step 4: Initialize Firebase
             if not firebase_admin._apps:
                 cred = credentials.Certificate(self.community_creds['firebase_creds'])
                 self.firebase_app = firebase_admin.initialize_app(cred)
             db = firestore.client()
-            failure_doc = {'image_url': image_public_url, 'failure_type': data.get("failure_type"), 'timestamp': firestore.SERVER_TIMESTAMP, 'plugin_version': self._plugin_version}
-            db.collection('failures').add(failure_doc)
-            self._logger.info("Successfully uploaded data to community database.")
-            self._plugin_manager.send_plugin_message(self._identifier, {"message": "Upload successful!"})
-        except Exception as e:
-            self._logger.exception("An unexpected error occurred during community database upload:")
-            self._plugin_manager.send_plugin_message(self._identifier, {"message": f"Error: {e}"})
 
+            # Step 5: Prepare the full metadata document
+            failure_doc = {
+                'image_url': image_public_url,
+                'failure_type': data.get("failure_type"),
+                'failed_frame_filename': failed_frame_filename,
+                'bounding_boxes': data.get("bounding_boxes", []), # Will be empty for now
+                'include_settings': data.get("include_settings", False),
+                'timestamp': firestore.SERVER_TIMESTAMP,
+                'plugin_version': self._plugin_version,
+            }
+            db.collection('failures').add(failure_doc)
+            self._logger.info("Successfully uploaded detailed metadata to Firestore.")
+
+            # Step 6: Report success back to the UI
+            self._plugin_manager.send_plugin_message(self._identifier, {"message": "Upload successful!"})
+
+        except Exception as e:
+            self._logger.exception("An error occurred during community database upload:")
+            self._plugin_manager.send_plugin_message(self._identifier, {"message": f"Error: {e}"})
+            
     def get_update_information(self):
         return dict(failuredetector=dict(
             displayName="AI Failure Detector", displayVersion=self._plugin_version,
