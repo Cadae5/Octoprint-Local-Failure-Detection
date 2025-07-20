@@ -1,4 +1,4 @@
-<!-- failuredetector_modal.jinja2 (Fully Implemented UI) -->
+<!-- failuredetector_modal.jinja2 (The Corrected Version with 'if' Binding) -->
 <div id="failure_report_modal" class="modal hide fade" tabindex="-1" role="dialog">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
@@ -7,7 +7,7 @@
     <div class="modal-body">
 
         <!-- Screen 1: "Did this print fail?" -->
-        <div data-bind="visible: modalScreen() === 'confirm_failure'">
+        <div data-bind="if: modalScreen() === 'confirm_failure'">
             <h4>Did this print fail?</h4>
             <p>Please review the final frame of your print.</p>
             <img data-bind="attr: { src: lastSnapshotUrl }" style="width: 100%; border-radius: 4px; margin-bottom: 15px; background-color: #222;" />
@@ -18,7 +18,7 @@
         </div>
 
         <!-- Screen 2: "When did the failure start?" -->
-        <div data-bind="visible: modalScreen() === 'select_frame'">
+        <div data-bind="if: modalScreen() === 'select_frame'">
             <h4>When did the failure start?</h4>
             <p>Use the slider to select the first frame where the failure is visible.</p>
             <!-- ko if: timelapseFrames().length > 0 -->
@@ -36,7 +36,7 @@
         </div>
 
         <!-- Screen 3: "Draw Boxes over failure" (Functional Placeholder) -->
-        <div data-bind="visible: modalScreen() === 'draw_boxes'">
+        <div data-bind="if: modalScreen() === 'draw_boxes'">
             <h4>Draw Boxes Over Failure Area (Future Feature)</h4>
             <p>The ability to draw bounding boxes will be added in a future update. You can skip this step for now.</p>
             <div style="background-color:#222; padding:10px; border-radius: 4px;">
@@ -45,7 +45,7 @@
         </div>
 
         <!-- Screen 4: "Confirm and Submit" -->
-        <div data-bind="visible: modalScreen() === 'final_confirm'">
+        <div data-bind="if: modalScreen() === 'final_confirm'">
             <h4 data-bind="text: finalConfirmTitle"></h4>
             <p>Review the information below before submitting.</p>
             <div style="background-color:#222; padding:10px; border-radius: 4px;">
@@ -57,7 +57,7 @@
             <label class="checkbox"><input type="checkbox" data-bind="checked: acceptDataUse"> I agree this data can be used for AI training.</label>
         </div>
     </div>
-    <div class="modal-footer" data-bind="visible: modalScreen() !== 'confirm_failure'">
+    <div class="modal-footer" data-bind="if: modalScreen() !== 'confirm_failure'">
         <button class="btn" data-bind="click: modalBack">Back</button>
         <button class="btn" data-dismiss="modal">Cancel</button>
         <button class="btn btn-primary" data-bind="click: modalConfirm, text: modalConfirmText, enable: modalConfirmEnabled"></button>
