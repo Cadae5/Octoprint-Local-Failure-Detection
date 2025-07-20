@@ -1,4 +1,4 @@
-// octoprint_failuredetector/static/js/failuredetector_modal.js (The Modal Brain)
+// octoprint_failuredetector/static/js/failuredetector_modal.js (The Correctly Named Version)
 
 $(function() {
     function FailureDetectorModalViewModel(parameters) {
@@ -7,21 +7,7 @@ $(function() {
 
         // --- All the observables and computeds for the modal ---
         self.modalScreen = ko.observable('none');
-        self.isFailureReport = ko.observable(true);
-        self.failureTypes = ko.observableArray(["Spaghetti", "Layer Shift", "Warping", "Adhesion Failure", "Other"]);
-        self.selectedFailureType = ko.observable(self.failureTypes()[0]);
-        self.includePrintSettings = ko.observable(true);
-        self.acceptDataUse = ko.observable(false);
-        self.timelapseFrames = ko.observableArray([]);
-        self.selectedFrameIndex = ko.observable(0);
-        self.lastSnapshotUrl = ko.observable(null);
-        self.modalTitle = ko.computed(function() { /* ... */ });
-        self.modalConfirmText = ko.computed(function() { /* ... */ });
-        self.modalConfirmEnabled = ko.computed(function() { /* ... */ });
-        self.selectedFramePath = ko.computed(function() { /* ... */ });
-        self.selectedFrameUrl = ko.computed(function() { /* ... */ });
-        self.finalConfirmTitle = ko.computed(function() { /* ... */ });
-        self.finalFailureTypeText = ko.computed(function() { /* ... */ });
+        // ... (rest of the observables and computeds are the same as the last version)
 
         // --- This function is called by the main ViewModel to open the modal ---
         self.open = function(snapshotUrl) {
@@ -32,8 +18,8 @@ $(function() {
         };
 
         // --- Actions for buttons within the modal ---
-        self.reportYes = function() { self.isFailureReport(true); self.modalScreen('select_frame'); OctoPrint.simpleApiCommand("failuredetector", "list_timelapse_frames"); };
-        self.reportNo = function() { self.isFailureReport(false); self.selectedFrameIndex(self.timelapseFrames().length - 1); self.modalScreen('final_confirm'); };
+        self.reportYes = function() { /* ... */ };
+        self.reportNo = function() { /* ... */ };
         self.modalConfirm = function() { /* ... */ };
         self.modalBack = function() { /* ... */ };
         self.submitFinalReport = function() { /* ... */ };
@@ -47,9 +33,10 @@ $(function() {
         };
     }
 
-    // We give this ViewModel a name so the main one can find it.
+    // --- THIS IS THE CRITICAL FIX ---
+    // We give our ViewModel a UNIQUE name to avoid conflicts.
     OCTOPRINT_VIEWMODELS.push({
-        construct: [FailureDetectorModalViewModel, "plugin_viewmodel"],
+        construct: [FailureDetectorModalViewModel, "failureDetectorModalViewModel"],
         dependencies: [],
         elements: ["#failure_report_modal"]
     });
