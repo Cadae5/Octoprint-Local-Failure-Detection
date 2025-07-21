@@ -50,13 +50,11 @@
                         <th style="width: 180px;">Actions</th>
                     </tr>
                 </thead>
-                <!-- This part will be filled in by the JavaScript -->
                 <tbody data-bind="foreach: recordedTimelapses">
                     <tr>
                         <td data-bind="text: name" style="word-break: break-all;"></td>
                         <td data-bind="text: size_mb"></td>
                         <td>
-                            <!-- The $parent is needed because we are inside a 'foreach' loop -->
                             <button class="btn btn-primary" data-bind="click: $parent.reportFailureForTimelapse">
                                 <i class="fa fa-flag"></i> Report Outcome
                             </button>
@@ -64,7 +62,6 @@
                     </tr>
                 </tbody>
             </table>
-            <!-- This button will re-scan the timelapse folder -->
             <button class="btn" data-bind="click: refreshTimelapseList"><i class="fa fa-refresh"></i> Refresh List</button>
         </div>
     </div>
