@@ -205,10 +205,6 @@ class FailureDetectorPlugin(
         except Exception as e:
             self._logger.exception(f"Error extracting frames from {filename}:")
 
-__plugin_name__ = "AI Failure Detector"
-__plugin_pythoncompat__ = ">=3,<4"
-def __plugin_load__():
-    # ... (This function is complete and correct) ...
     def detection_loop(self):
         while self.is_printing:
             if self.interpreter:
@@ -266,17 +262,38 @@ def __plugin_load__():
             self._plugin_manager.send_plugin_message(self._identifier, {"message": "Error: Backend not configured."})
             return
         try:
-            snapshot_url = self._settings.get(["webcam_snapshot_url"])
-            response = requests.get(snapshot_url, timeout=10)
-            response.raise_for_status()
-            image_bytes = BytesIO(response.content)
+            failed_frame_filename = data.get("failed_frame_path")
+            if not failed_frame_filename:
+                self._logger.error("No failed frame filename was provided.")
+                return
+            
+            # Determine if the frame is from a snapshot or an extracted timelapse
+            if failed_frame_filename == "last_snapshot.jpg":
+                 # Fetch the snapshot directly
+                snapshot_url = self._settings.get(["webcam_snapshot_url"])
+                response = requests.get(snapshot_url, timeout=10)
+                response.raise_for_status()
+                image_bytes = BytesIO(response.content)
+            else:
+                # This is an extracted frame, find it on disk
+                tmp_dir = self._settings.global_get_folder("timelapse_tmp")
+                full_path_to_image = os.path.join(tmp_dir, failed_frame_filename)
+                if not os.path.exists(full_path_to_image):
+                    self._logger.error(f"Cannot find specified frame on disk: {full_path_to_image}")
+                    return
+                image_bytes = open(full_path_to_image, "rb")
+
             s3_client = boto3.client('s3',
                 endpoint_url=f"https://{self.community_creds['b2_endpoint_url']}",
                 aws_access_key_id=self.community_creds['b2_key_id'],
                 aws_secret_access_key=self.community_creds['b2_app_key'])
-            unique_filename = f"failure-{uuid.uuid4()}.jpg"
+            unique_filename = f"{data.get('failure_type', 'unknown')}-{uuid.uuid4()}.jpg"
             s3_client.upload_fileobj(image_bytes, self.community_creds['b2_bucket_name'], unique_filename)
             image_public_url = f"https://{self.community_creds['b2_bucket_name']}.{self.community_creds['b2_endpoint_url']}/{unique_filename}"
+            
+            if isinstance(image_bytes, BytesIO): # Close if it's an in-memory file
+                image_bytes.close()
+
             if not firebase_admin._apps:
                 cred = credentials.Certificate(self.community_creds['firebase_creds'])
                 self.firebase_app = firebase_admin.initialize_app(cred)
@@ -289,13 +306,19 @@ def __plugin_load__():
             self._logger.exception("An unexpected error occurred during community database upload:")
             self._plugin_manager.send_plugin_message(self._identifier, {"message": f"Error: {e}"})
 
+    # --- THIS IS THE MISSING METHOD, NOW RESTORED ---
     def get_update_information(self):
-        return dict(failuredetector=dict(
-            displayName="AI Failure Detector", displayVersion=self._plugin_version,
-            type="github_release", user="YourUsername", repo="Local-Failure-Detection",
-            current=self._plugin_version,
-            pip="https://github.com/{user}/{repo}/archive/{target_version}.zip"
-        ))
+        return dict(
+            failuredetector=dict(
+                displayName="AI Failure Detector",
+                displayVersion=self._plugin_version,
+                type="github_release",
+                user="YourUsername", # Replace with your GitHub username
+                repo="Local-Failure-Detection", # Replace with your repository name
+                current=self._plugin_version,
+                pip="https://github.com/{user}/{repo}/archive/{target_version}.zip"
+            )
+        )
 
 __plugin_name__ = "AI Failure Detector"
 __plugin_pythoncompat__ = ">=3,<4"
@@ -304,4 +327,6 @@ def __plugin_load__():
     global __plugin_implementation__
     __plugin_implementation__ = FailureDetectorPlugin()
     global __plugin_hooks__
-    __plugin_hooks__ = {"octoprint.plugin.softwareupdate.check_config": __plugin_implementation__.get_update_information}
+    __plugin_hooks__ = {
+        "octoprint.plugin.softwareupdate.check_config": __plugin_implementation__.get_update_information
+    }
