@@ -2,7 +2,6 @@
 from __future__ import absolute_import
 
 import octoprint.plugin
-from flask import Blueprint, send_from_directory
 import threading
 import time
 import requests
@@ -14,6 +13,7 @@ import json
 import glob
 import shutil
 import subprocess
+from flask import Blueprint, send_from_directory
 
 try:
     import boto3
@@ -32,11 +32,6 @@ except ImportError:
 
 FFMPEG_AVAILABLE = shutil.which("ffmpeg") is not None
 
-
-
-
-
-
 class FailureDetectorPlugin(
     octoprint.plugin.StartupPlugin,
     octoprint.plugin.EventHandlerPlugin,
@@ -46,53 +41,6 @@ class FailureDetectorPlugin(
     octoprint.plugin.AssetPlugin,
     octoprint.plugin.BlueprintPlugin
 ):
-
-    def on_api_command(self, command, data):
-        if command == "force_check":
-            check_thread = threading.Thread(target=self.perform_check)
-            check_thread.daemon = True
-            check_thread.start()
-        
-        # --- THIS IS THE NEW, ROBUST IMPLEMENTATION ---
-        elif command == "list_recorded_timelapses":
-            self._logger.info("API call received to list recorded timelapses.")
-            try:
-                # Use the correct, official method to get the folder path
-                timelapse_dir = self._settings.getBaseFolder("timelapse")
-                self._logger.info(f"Searching for .mp4 files in: {timelapse_dir}")
-                
-                mp4_files = sorted(glob.glob(os.path.join(timelapse_dir, "*.mp4")), key=os.path.getmtime, reverse=True)
-                
-                # Add a log to show how many files were found
-                self._logger.info(f"Found {len(mp4_files)} timelapse files.")
-                
-                timelapse_info = [
-                    {"name": os.path.basename(f), "size_mb": round(os.path.getsize(f) / (1024*1024), 2)}
-                    for f in mp4_files
-                ]
-                # Always send a message back, even if the list is empty
-                self._plugin_manager.send_plugin_message(self._identifier, {"type": "recorded_timelapse_list", "timelapses": timelapse_info})
-
-            except Exception as e:
-                self._logger.exception("CRITICAL: An error occurred while listing recorded timelapses:")
-                # If there's an error, send an error message back to the UI
-                self._plugin_manager.send_plugin_message(self._identifier, {"type": "error", "message": "Could not list timelapses. Check octoprint.log."})
-
-        elif command == "list_timelapse_frames":
-            # ... (this method is unchanged from the last working version)
-        
-        elif command == "upload_failure_data":
-            # ... (this method is unchanged from the last working version)
-
-    # ... (the rest of the file is the same as the last working version)
-
-
-
-
-
-
-
-
 
     def __init__(self):
         self.is_printing = False
@@ -180,36 +128,30 @@ class FailureDetectorPlugin(
                 "bounding_boxes", "include_settings"
             ]
         )
-        
+
     def on_api_command(self, command, data):
         if command == "force_check":
             check_thread = threading.Thread(target=self.perform_check)
             check_thread.daemon = True
             check_thread.start()
         
-        # --- THIS IS THE NEW, ROBUST IMPLEMENTATION ---
         elif command == "list_recorded_timelapses":
             self._logger.info("API call received to list recorded timelapses.")
             try:
-                # Use the correct, official method to get the folder path
                 timelapse_dir = self._settings.getBaseFolder("timelapse")
                 self._logger.info(f"Searching for .mp4 files in: {timelapse_dir}")
                 
                 mp4_files = sorted(glob.glob(os.path.join(timelapse_dir, "*.mp4")), key=os.path.getmtime, reverse=True)
                 
-                # Add a log to show how many files were found
                 self._logger.info(f"Found {len(mp4_files)} timelapse files.")
                 
                 timelapse_info = [
                     {"name": os.path.basename(f), "size_mb": round(os.path.getsize(f) / (1024*1024), 2)}
                     for f in mp4_files
                 ]
-                # Always send a message back, even if the list is empty
                 self._plugin_manager.send_plugin_message(self._identifier, {"type": "recorded_timelapse_list", "timelapses": timelapse_info})
-
             except Exception as e:
                 self._logger.exception("CRITICAL: An error occurred while listing recorded timelapses:")
-                # If there's an error, send an error message back to the UI
                 self._plugin_manager.send_plugin_message(self._identifier, {"type": "error", "message": "Could not list timelapses. Check octoprint.log."})
 
         elif command == "list_timelapse_frames":
