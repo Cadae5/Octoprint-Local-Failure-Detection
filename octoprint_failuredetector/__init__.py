@@ -12,6 +12,7 @@ import uuid
 import json
 import glob
 import shutil
+import subprocess
 
 try:
     import boto3
@@ -28,11 +29,8 @@ try:
 except ImportError:
     TFLITE_AVAILABLE = False
 
-try:
-    import cv2
-    OPENCV_AVAILABLE = True
-except ImportError:
-    OPENCV_AVAILABLE = False
+# We no longer use OpenCV. Instead, we check for the ffmpeg executable.
+FFMPEG_AVAILABLE = shutil.which("ffmpeg") is not None
 
 class FailureDetectorPlugin(
     octoprint.plugin.StartupPlugin,
@@ -57,8 +55,8 @@ class FailureDetectorPlugin(
         self._logger.info("AI Failure Detector starting up...")
         if not TFLITE_AVAILABLE:
             self._logger.error("TensorFlow Lite runtime is not installed. AI features will be disabled.")
-        if not OPENCV_AVAILABLE:
-            self._logger.error("OpenCV is not installed. Timelapse frame extraction will be disabled.")
+        if not FFMPEG_AVAILABLE:
+            self._logger.error("FFmpeg executable not found in PATH. Timelapse frame extraction will be disabled.")
         
         self._load_community_credentials()
         self.load_model()
@@ -166,10 +164,10 @@ class FailureDetectorPlugin(
             self._plugin_manager.send_plugin_message(self._identifier, {"type": "show_post_print_dialog"})
 
     def _extract_frames_from_video(self, filename):
-        self._logger.info(f"Extracting frames from {filename}...")
-        if not OPENCV_AVAILABLE:
-            self._logger.error("OpenCV is not installed. Cannot extract frames.")
-            self._plugin_manager.send_plugin_message(self._identifier, {"type": "frame_list", "frames": [], "error": "OpenCV backend not installed."})
+        self._logger.info(f"Extracting frames from {filename} using FFmpeg...")
+        if not FFMPEG_AVAILABLE:
+            self._logger.error("FFmpeg is not installed. Cannot extract frames.")
+            self._plugin_manager.send_plugin_message(self._identifier, {"type": "frame_list", "frames": [], "error": "FFmpeg backend not installed."})
             return
 
         try:
@@ -183,27 +181,38 @@ class FailureDetectorPlugin(
                 shutil.rmtree(frame_output_dir)
             os.makedirs(frame_output_dir)
 
-            cap = cv2.VideoCapture(video_path)
-            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            # First, use ffprobe to get total frame count
+            ffprobe_cmd = ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=nb_frames", "-of", "default=nokey=1:noprint_wrappers=1", video_path]
+            process = subprocess.run(ffprobe_cmd, capture_output=True, text=True, check=True)
+            total_frames = int(process.stdout.strip())
+
             sample_count = 10
             step = max(1, total_frames // sample_count)
+
+            # Now, use ffmpeg to extract the frames
+            ffmpeg_cmd = [
+                "ffmpeg",
+                "-i", video_path,
+                "-vf", f"select='not(mod(n,{step}))'",
+                "-vsync", "vfr",
+                "-q:v", "2",
+                os.path.join(frame_output_dir, "frame_%06d.jpg")
+            ]
             
-            extracted_frame_paths = []
-            for frame_num in range(0, total_frames, step):
-                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_num)
-                ret, frame = cap.read()
-                if ret:
-                    frame_name = f"frame_{frame_num:06d}.jpg"
-                    full_frame_path = os.path.join(frame_output_dir, frame_name)
-                    cv2.imwrite(full_frame_path, frame)
-                    relative_path = os.path.join(unique_folder_name, frame_name)
-                    extracted_frame_paths.append(relative_path)
+            self._logger.info(f"Running FFmpeg command: {' '.join(ffmpeg_cmd)}")
+            subprocess.run(ffmpeg_cmd, check=True, capture_output=True, text=True)
+
+            extracted_frames = sorted(glob.glob(os.path.join(frame_output_dir, "*.jpg")))
+            extracted_frame_paths = [os.path.join(unique_folder_name, os.path.basename(p)) for p in extracted_frames]
             
-            cap.release()
             self._logger.info(f"Successfully extracted {len(extracted_frame_paths)} frames.")
             self._plugin_manager.send_plugin_message(self._identifier, {"type": "frame_list", "frames": extracted_frame_paths, "base": "downloads/timelapse/tmp"})
+
+        except subprocess.CalledProcessError as e:
+            self._logger.error(f"FFmpeg/FFprobe failed. Return code: {e.returncode}")
+            self._logger.error(f"FFmpeg/FFprobe stderr: {e.stderr}")
         except Exception as e:
-            self._logger.exception(f"Error extracting frames from {filename}:")
+            self._logger.exception(f"An error occurred extracting frames from {filename}:")
 
     def detection_loop(self):
         while self.is_printing:
@@ -218,7 +227,6 @@ class FailureDetectorPlugin(
                 time.sleep(1)
 
     def perform_check(self):
-        self._logger.info("--- Starting Perform Check ---")
         if not self.interpreter or not self.input_details:
             self._logger.error("Aborting check: AI model not loaded.")
             self._plugin_manager.send_plugin_message(self._identifier, dict(status="error", error="AI Model not loaded"))
@@ -265,21 +273,21 @@ class FailureDetectorPlugin(
             failed_frame_filename = data.get("failed_frame_path")
             if not failed_frame_filename:
                 self._logger.error("No failed frame filename was provided.")
+                self._plugin_manager.send_plugin_message(self._identifier, {"message": "Error: No frame specified."})
                 return
             
-            # Determine if the frame is from a snapshot or an extracted timelapse
+            image_bytes = None
             if failed_frame_filename == "last_snapshot.jpg":
-                 # Fetch the snapshot directly
                 snapshot_url = self._settings.get(["webcam_snapshot_url"])
                 response = requests.get(snapshot_url, timeout=10)
                 response.raise_for_status()
                 image_bytes = BytesIO(response.content)
             else:
-                # This is an extracted frame, find it on disk
                 tmp_dir = self._settings.global_get_folder("timelapse_tmp")
                 full_path_to_image = os.path.join(tmp_dir, failed_frame_filename)
                 if not os.path.exists(full_path_to_image):
                     self._logger.error(f"Cannot find specified frame on disk: {full_path_to_image}")
+                    self._plugin_manager.send_plugin_message(self._identifier, {"message": "Error: Frame not found."})
                     return
                 image_bytes = open(full_path_to_image, "rb")
 
@@ -291,8 +299,7 @@ class FailureDetectorPlugin(
             s3_client.upload_fileobj(image_bytes, self.community_creds['b2_bucket_name'], unique_filename)
             image_public_url = f"https://{self.community_creds['b2_bucket_name']}.{self.community_creds['b2_endpoint_url']}/{unique_filename}"
             
-            if isinstance(image_bytes, BytesIO): # Close if it's an in-memory file
-                image_bytes.close()
+            image_bytes.close()
 
             if not firebase_admin._apps:
                 cred = credentials.Certificate(self.community_creds['firebase_creds'])
@@ -306,15 +313,14 @@ class FailureDetectorPlugin(
             self._logger.exception("An unexpected error occurred during community database upload:")
             self._plugin_manager.send_plugin_message(self._identifier, {"message": f"Error: {e}"})
 
-    # --- THIS IS THE MISSING METHOD, NOW RESTORED ---
     def get_update_information(self):
         return dict(
             failuredetector=dict(
                 displayName="AI Failure Detector",
                 displayVersion=self._plugin_version,
                 type="github_release",
-                user="YourUsername", # Replace with your GitHub username
-                repo="Local-Failure-Detection", # Replace with your repository name
+                user="YourUsername",
+                repo="Local-Failure-Detection",
                 current=self._plugin_version,
                 pip="https://github.com/{user}/{repo}/archive/{target_version}.zip"
             )
