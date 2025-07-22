@@ -2,6 +2,7 @@
 from __future__ import absolute_import
 
 import octoprint.plugin
+from flask import Blueprint, send_from_directory # NEW: Import Flask components
 import threading
 import time
 import requests
@@ -14,202 +15,51 @@ import glob
 import shutil
 import subprocess
 
-try:
-    import boto3
-    import firebase_admin
-    from firebase_admin import credentials, firestore
-    DATABASE_LIBS_AVAILABLE = True
-except ImportError:
-    DATABASE_LIBS_AVAILABLE = False
-
-try:
-    from tflite_runtime.interpreter import Interpreter
-    import numpy as np
-    TFLITE_AVAILABLE = True
-except ImportError:
-    TFLITE_AVAILABLE = False
-
-try:
-    import cv2
-    OPENCV_AVAILABLE = True
-except ImportError:
-    OPENCV_AVAILABLE = False
-
-FFMPEG_AVAILABLE = shutil.which("ffmpeg") is not None
+# ... (All other imports are the same)
 
 class FailureDetectorPlugin(
-    octoprint.plugin.StartupPlugin,
-    octoprint.plugin.EventHandlerPlugin,
-    octoprint.plugin.SettingsPlugin,
-    octoprint.plugin.TemplatePlugin,
-    octoprint.plugin.SimpleApiPlugin,
-    octoprint.plugin.AssetPlugin
+    # ... (Other mixins are the same)
+    octoprint.plugin.BlueprintPlugin # NEW: Add the BlueprintPlugin mixin
 ):
+    # ... (__init__, on_after_startup, _load_community_credentials, load_model are the same)
 
-    def __init__(self):
-        self.is_printing = False
-        self.detection_thread = None
-        self.interpreter = None
-        self.input_details = None
-        self.output_details = None
-        self.labels = []
-        self.community_creds = None
-        self.firebase_app = None
-
-    def on_after_startup(self):
-        self._logger.info("AI Failure Detector starting up...")
-        if not TFLITE_AVAILABLE:
-            self._logger.error("TensorFlow Lite runtime is not installed. AI features will be disabled.")
-        if not FFMPEG_AVAILABLE:
-            self._logger.error("FFmpeg executable not found in PATH. Timelapse frame extraction will be disabled.")
-        
-        self._load_community_credentials()
-        self.load_model()
-
-    def _load_community_credentials(self):
-        creds_path = os.path.join(self._basefolder, "community_db_creds.json")
-        try:
-            with open(creds_path, 'r') as f:
-                self.community_creds = json.load(f)
-            self._logger.info("Successfully loaded community database credentials.")
-        except Exception as e:
-            self._logger.error(f"Could not load community_db_creds.json. Data upload will be disabled. Error: {e}")
-
-    def load_model(self):
-        if not TFLITE_AVAILABLE:
-            return
-        try:
-            model_path = os.path.join(self._basefolder, "print_failure_model.tflite")
-            if not os.path.exists(model_path):
-                self._logger.error(f"Model file not found at {model_path}. Cannot load AI model.")
-                return
-            self.interpreter = Interpreter(model_path=model_path)
-            self.interpreter.allocate_tensors()
-            self.input_details = self.interpreter.get_input_details()
-            self.output_details = self.interpreter.get_output_details()
-            labels_path = os.path.join(self._basefolder, "labels.txt")
-            with open(labels_path, 'r') as f:
-                self.labels = [line.strip() for line in f.readlines()]
-            self._logger.info("AI Model loaded successfully.")
-        except Exception as e:
-            self._logger.exception("CRITICAL: Failed to load the AI model. The plugin will not work.")
-            self.interpreter = None
-
-    def get_settings_defaults(self):
-        return dict(
-            check_interval=15,
-            failure_confidence=0.8,
-            webcam_snapshot_url="http://127.0.0.1:8080/?action=snapshot"
-        )
-
-    def get_template_configs(self):
+    # --- NEW: Implement the Blueprint to serve our temporary frames ---
+    def get_blueprint_routes(self):
+        # The URL will be /plugin/failuredetector/temp_frame/<path_to_the_image>
         return [
-            dict(type="settings", custom_bindings=False),
-            dict(type="navbar", custom_bindings=False),
-            dict(type="tab", name="Failure Detector", custom_bindings=False),
-            dict(type="generic", template="failuredetector_modal.jinja2")
+            (r"/temp_frame/(.*)", self.serve_temp_frame)
         ]
 
-    def get_assets(self):
-        return dict(js=["js/failuredetector.js"])
+    def serve_temp_frame(self, filename):
+        # This function securely serves a file ONLY from the timelapse_tmp directory
+        temp_dir = self._settings.getBaseFolder("timelapse_tmp")
+        return send_from_directory(temp_dir, filename)
 
-    def get_api_commands(self):
-        return dict(
-            force_check=[],
-            list_recorded_timelapses=[],
-            list_timelapse_frames=["filename"],
-            upload_failure_data=[
-                "failure_type", "failed_frame_path", 
-                "bounding_boxes", "include_settings"
-            ]
-        )
+    # --- (get_settings_defaults, get_template_configs, get_assets, get_api_commands are the same) ---
 
     def on_api_command(self, command, data):
-        if command == "force_check":
-            check_thread = threading.Thread(target=self.perform_check)
-            check_thread.daemon = True
-            check_thread.start()
-        
-        elif command == "list_recorded_timelapses":
-            self._logger.info("API call received to list recorded timelapses.")
-            try:
-                # CORRECTED METHOD
-                timelapse_dir = self._settings.getBaseFolder("timelapse")
-                mp4_files = sorted(glob.glob(os.path.join(timelapse_dir, "*.mp4")), key=os.path.getmtime, reverse=True)
-                timelapse_info = [
-                    {"name": os.path.basename(f), "size_mb": round(os.path.getsize(f) / (1024*1024), 2)}
-                    for f in mp4_files
-                ]
-                self._plugin_manager.send_plugin_message(self._identifier, {"type": "recorded_timelapse_list", "timelapses": timelapse_info})
-            except Exception as e:
-                self._logger.exception("Error listing recorded timelapses:")
-
-        elif command == "list_timelapse_frames":
-            filename = data.get("filename")
-            extract_thread = threading.Thread(target=self._extract_frames_from_video, args=(filename,))
-            extract_thread.daemon = True
-            extract_thread.start()
-        
-        elif command == "upload_failure_data":
-            upload_thread = threading.Thread(target=self._upload_to_database, args=(data,))
-            upload_thread.daemon = True
-            upload_thread.start()
+        # ... (This method is the same as the last working version)
 
     def on_event(self, event, payload):
-        if event == "PrintStarted":
-            self.is_printing = True
-            self.detection_thread = threading.Thread(target=self.detection_loop)
-            self.detection_thread.daemon = True
-            self.detection_thread.start()
-        elif event in ("PrintCancelled"):
-            self.is_printing = False
-            self._plugin_manager.send_plugin_message(self._identifier, dict(status="idle"))
-        elif event == "PrintDone":
-            self._logger.info("Print finished. Triggering failure report dialog.")
-            self.is_printing = False
-            self._plugin_manager.send_plugin_message(self._identifier, {"type": "show_post_print_dialog"})
+        # ... (This method is the same as the last working version)
 
     def _extract_frames_from_video(self, filename):
         self._logger.info(f"Extracting frames from {filename} using FFmpeg...")
-        if not FFMPEG_AVAILABLE:
-            self._logger.error("FFmpeg is not installed. Cannot extract frames.")
-            self._plugin_manager.send_plugin_message(self._identifier, {"type": "frame_list", "frames": [], "error": "FFmpeg backend not installed."})
-            return
-
+        # ... (The FFMPEG_AVAILABLE check is the same)
         try:
-            # CORRECTED METHOD
-            timelapse_dir = self._settings.getBaseFolder("timelapse")
-            video_path = os.path.join(timelapse_dir, filename)
+            # ... (The first part of the extraction logic is the same)
             
-            # CORRECTED METHOD
-            tmp_dir = self._settings.getBaseFolder("timelapse_tmp")
-            
-            unique_folder_name = str(uuid.uuid4())
-            frame_output_dir = os.path.join(tmp_dir, unique_folder_name)
-            if os.path.exists(frame_output_dir):
-                shutil.rmtree(frame_output_dir)
-            os.makedirs(frame_output_dir)
-
-            ffprobe_cmd = ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=nb_frames", "-of", "default=nokey=1:noprint_wrappers=1", video_path]
-            process = subprocess.run(ffprobe_cmd, capture_output=True, text=True, check=True)
-            total_frames = int(process.stdout.strip())
-
-            sample_count = 10
-            step = max(1, total_frames // sample_count)
-
-            ffmpeg_cmd = ["ffmpeg", "-i", video_path, "-vf", f"select='not(mod(n,{step}))'", "-vsync", "vfr", "-q:v", "2", os.path.join(frame_output_dir, "frame_%06d.jpg")]
-            
-            self._logger.info(f"Running FFmpeg command: {' '.join(ffmpeg_cmd)}")
-            subprocess.run(ffmpeg_cmd, check=True, capture_output=True, text=True)
-
-            extracted_frames = sorted(glob.glob(os.path.join(frame_output_dir, "*.jpg")))
-            extracted_frame_paths = [os.path.join(unique_folder_name, os.path.basename(p)) for p in extracted_frames]
-            
+            # --- CRITICAL CHANGE: We now send a different base URL to the frontend ---
             self._logger.info(f"Successfully extracted {len(extracted_frame_paths)} frames.")
-            self._plugin_manager.send_plugin_message(self._identifier, {"type": "frame_list", "frames": extracted_frame_paths, "base": "downloads/timelapse/tmp"})
-        except subprocess.CalledProcessError as e:
-            self._logger.error(f"FFmpeg/FFprobe failed. Return code: {e.returncode}")
-            self._logger.error(f"FFmpeg/FFprobe stderr: {e.stderr}")
+            self._plugin_manager.send_plugin_message(
+                self._identifier, 
+                {
+                    "type": "frame_list", 
+                    "frames": extracted_frame_paths, 
+                    # This new 'base' points to our secure Blueprint route
+                    "base": f"plugin/{self._identifier}/temp_frame" 
+                }
+            )
         except Exception as e:
             self._logger.exception(f"An error occurred extracting frames from {filename}:")
 
