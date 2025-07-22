@@ -29,7 +29,12 @@ try:
 except ImportError:
     TFLITE_AVAILABLE = False
 
-# We no longer use OpenCV. Instead, we check for the ffmpeg executable.
+try:
+    import cv2
+    OPENCV_AVAILABLE = True
+except ImportError:
+    OPENCV_AVAILABLE = False
+
 FFMPEG_AVAILABLE = shutil.which("ffmpeg") is not None
 
 class FailureDetectorPlugin(
@@ -128,7 +133,8 @@ class FailureDetectorPlugin(
         elif command == "list_recorded_timelapses":
             self._logger.info("API call received to list recorded timelapses.")
             try:
-                timelapse_dir = self._settings.global_get_folder("timelapse")
+                # CORRECTED METHOD
+                timelapse_dir = self._settings.getBaseFolder("timelapse")
                 mp4_files = sorted(glob.glob(os.path.join(timelapse_dir, "*.mp4")), key=os.path.getmtime, reverse=True)
                 timelapse_info = [
                     {"name": os.path.basename(f), "size_mb": round(os.path.getsize(f) / (1024*1024), 2)}
@@ -171,17 +177,19 @@ class FailureDetectorPlugin(
             return
 
         try:
-            timelapse_dir = self._settings.global_get_folder("timelapse")
+            # CORRECTED METHOD
+            timelapse_dir = self._settings.getBaseFolder("timelapse")
             video_path = os.path.join(timelapse_dir, filename)
             
-            tmp_dir = self._settings.global_get_folder("timelapse_tmp")
+            # CORRECTED METHOD
+            tmp_dir = self._settings.getBaseFolder("timelapse_tmp")
+            
             unique_folder_name = str(uuid.uuid4())
             frame_output_dir = os.path.join(tmp_dir, unique_folder_name)
             if os.path.exists(frame_output_dir):
                 shutil.rmtree(frame_output_dir)
             os.makedirs(frame_output_dir)
 
-            # First, use ffprobe to get total frame count
             ffprobe_cmd = ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=nb_frames", "-of", "default=nokey=1:noprint_wrappers=1", video_path]
             process = subprocess.run(ffprobe_cmd, capture_output=True, text=True, check=True)
             total_frames = int(process.stdout.strip())
@@ -189,15 +197,7 @@ class FailureDetectorPlugin(
             sample_count = 10
             step = max(1, total_frames // sample_count)
 
-            # Now, use ffmpeg to extract the frames
-            ffmpeg_cmd = [
-                "ffmpeg",
-                "-i", video_path,
-                "-vf", f"select='not(mod(n,{step}))'",
-                "-vsync", "vfr",
-                "-q:v", "2",
-                os.path.join(frame_output_dir, "frame_%06d.jpg")
-            ]
+            ffmpeg_cmd = ["ffmpeg", "-i", video_path, "-vf", f"select='not(mod(n,{step}))'", "-vsync", "vfr", "-q:v", "2", os.path.join(frame_output_dir, "frame_%06d.jpg")]
             
             self._logger.info(f"Running FFmpeg command: {' '.join(ffmpeg_cmd)}")
             subprocess.run(ffmpeg_cmd, check=True, capture_output=True, text=True)
@@ -207,7 +207,6 @@ class FailureDetectorPlugin(
             
             self._logger.info(f"Successfully extracted {len(extracted_frame_paths)} frames.")
             self._plugin_manager.send_plugin_message(self._identifier, {"type": "frame_list", "frames": extracted_frame_paths, "base": "downloads/timelapse/tmp"})
-
         except subprocess.CalledProcessError as e:
             self._logger.error(f"FFmpeg/FFprobe failed. Return code: {e.returncode}")
             self._logger.error(f"FFmpeg/FFprobe stderr: {e.stderr}")
@@ -227,6 +226,7 @@ class FailureDetectorPlugin(
                 time.sleep(1)
 
     def perform_check(self):
+        self._logger.info("--- Starting Perform Check ---")
         if not self.interpreter or not self.input_details:
             self._logger.error("Aborting check: AI model not loaded.")
             self._plugin_manager.send_plugin_message(self._identifier, dict(status="error", error="AI Model not loaded"))
@@ -283,7 +283,8 @@ class FailureDetectorPlugin(
                 response.raise_for_status()
                 image_bytes = BytesIO(response.content)
             else:
-                tmp_dir = self._settings.global_get_folder("timelapse_tmp")
+                # CORRECTED METHOD
+                tmp_dir = self._settings.getBaseFolder("timelapse_tmp")
                 full_path_to_image = os.path.join(tmp_dir, failed_frame_filename)
                 if not os.path.exists(full_path_to_image):
                     self._logger.error(f"Cannot find specified frame on disk: {full_path_to_image}")
