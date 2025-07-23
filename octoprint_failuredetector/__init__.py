@@ -335,6 +335,8 @@ def __plugin_load__():
     global __plugin_implementation__
     __plugin_implementation__ = FailureDetectorPlugin()
     global __plugin_hooks__
+
     __plugin_hooks__ = {
-        "octoprint.plugin.softwareupdate.check_config": __plugin_implementation__.get_update_information
+        "octoprint.plugin.softwareupdate.check_config": __plugin_implementation__.get_update_information,
+        "octoprint.server.http.routes": __plugin_implementation__.get_blueprint_routes
     }
