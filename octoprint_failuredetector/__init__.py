@@ -91,11 +91,7 @@ class FailureDetectorPlugin(
             self._logger.exception("CRITICAL: Failed to load the AI model. The plugin will not work.")
             self.interpreter = None
 
-    def get_blueprint_routes(self):
-        return [
-            (r"/temp_frame/(.*)", self.serve_temp_frame)
-        ]
-
+    @octoprint.plugin.BlueprintPlugin.route("/temp_frame/<path:filename>", methods=["GET"])
     def serve_temp_frame(self, filename):
         temp_dir = self._settings.getBaseFolder("timelapse_tmp")
         return send_from_directory(temp_dir, filename)
@@ -334,9 +330,8 @@ __plugin_pythoncompat__ = ">=3,<4"
 def __plugin_load__():
     global __plugin_implementation__
     __plugin_implementation__ = FailureDetectorPlugin()
+    
     global __plugin_hooks__
-
     __plugin_hooks__ = {
-        "octoprint.plugin.softwareupdate.check_config": __plugin_implementation__.get_update_information,
-        "octoprint.server.http.routes": __plugin_implementation__.get_blueprint_routes
+        "octoprint.plugin.softwareupdate.check_config": __plugin_implementation__.get_update_information
     }
