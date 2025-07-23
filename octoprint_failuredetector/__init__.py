@@ -2,6 +2,7 @@
 from __future__ import absolute_import
 
 import octoprint.plugin
+from flask import Blueprint, send_from_directory
 import threading
 import time
 import requests
@@ -13,7 +14,6 @@ import json
 import glob
 import shutil
 import subprocess
-from flask import Blueprint, send_from_directory
 
 try:
     import boto3
@@ -139,19 +139,14 @@ class FailureDetectorPlugin(
             self._logger.info("API call received to list recorded timelapses.")
             try:
                 timelapse_dir = self._settings.getBaseFolder("timelapse")
-                self._logger.info(f"Searching for .mp4 files in: {timelapse_dir}")
-                
                 mp4_files = sorted(glob.glob(os.path.join(timelapse_dir, "*.mp4")), key=os.path.getmtime, reverse=True)
-                
-                self._logger.info(f"Found {len(mp4_files)} timelapse files.")
-                
                 timelapse_info = [
                     {"name": os.path.basename(f), "size_mb": round(os.path.getsize(f) / (1024*1024), 2)}
                     for f in mp4_files
                 ]
                 self._plugin_manager.send_plugin_message(self._identifier, {"type": "recorded_timelapse_list", "timelapses": timelapse_info})
             except Exception as e:
-                self._logger.exception("CRITICAL: An error occurred while listing recorded timelapses:")
+                self._logger.exception("Error listing recorded timelapses:")
                 self._plugin_manager.send_plugin_message(self._identifier, {"type": "error", "message": "Could not list timelapses. Check octoprint.log."})
 
         elif command == "list_timelapse_frames":
