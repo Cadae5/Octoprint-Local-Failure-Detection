@@ -1,19 +1,60 @@
-<!-- octoprint_failuredetector/templates/failuredetector_settings.jinja2 (Corrected) -->
-<div class="control-group">
-    <label class="control-label">Webcam Snapshot URL</label>
-    <div class="controls">
-        <input type="text" class="input-block-level" data-bind="value: settings.plugins.failuredetector.webcam_snapshot_url">
+<!-- failuredetector_settings.jinja2 (The New, Fleshed-Out Version) -->
+<div id="settings_failuredetector">
+    <h4><i class="fa fa-crosshairs"></i> Automatic Detection</h4>
+    <div class="control-group">
+        <label class="control-label">Enable Automatic Detection</label>
+        <div class="controls">
+            <label class="checkbox">
+                <input type="checkbox" data-bind="checked: settings.plugins.failuredetector.detection.enabled">
+                Check for failures automatically during a print.
+            </label>
+        </div>
     </div>
-</div>
-<div class="control-group">
-    <label class="control-label">Check Interval (seconds)</label>
-    <div class="controls">
-        <input type="number" min="5" class="input-block-level" data-bind="value: settings.plugins.failuredetector.check_interval">
+    
+    <div data-bind="with: settings.plugins.failuredetector.detection, enable: enabled">
+        <div class="control-group">
+            <label class="control-label">Detection Trigger</label>
+            <div class="controls">
+                <select data-bind="value: trigger">
+                    <option value="timer">Timer</option>
+                    <!-- ko if: octolapse_is_present -->
+                    <option value="octolapse">Octolapse Frame</option>
+                    <!-- /ko -->
+                </select>
+                <!-- ko ifnot: octolapse_is_present -->
+                <span class="help-block">Install the Octolapse plugin to enable triggering on new frames.</span>
+                <!-- /ko -->
+            </div>
+        </div>
+
+        <div class="control-group" data-bind="enable: trigger() === 'timer'">
+            <label class="control-label">Check Interval</label>
+            <div class="controls">
+                <div class="input-append">
+                    <input type="number" min="5" class="input-small" data-bind="value: check_interval">
+                    <span class="add-on">seconds</span>
+                </div>
+                <span class="help-block">How often to check for a failure when using the Timer trigger.</span>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label class="control-label">Failure Confidence Threshold</label>
+            <div class="controls">
+                <input type="number" min="0.5" max="1.0" step="0.05" class="input-small" data-bind="value: failure_confidence">
+                <span class="help-block">A value from 0.5 to 1.0. Higher values are less sensitive. (e.g., 0.8 = 80%)</span>
+            </div>
+        </div>
     </div>
-</div>
-<div class="control-group">
-    <label class="control-label">Failure Confidence Threshold</label>
-    <div class="controls">
-        <input type="number" min="0.5" max="1.0" step="0.05" class="input-block-level" data-bind="value: settings.plugins.failuredetector.failure_confidence">
+
+    <hr>
+    <h4><i class="fa fa-camera"></i> Webcam</h4>
+    <div class="control-group">
+        <label class="control-label">Webcam Snapshot URL</label>
+        <div class="controls">
+            <input type="text" class="input-block-level" data-bind="value: settings.plugins.failuredetector.webcam_snapshot_url">
+            <button class="btn" data-bind="click: testUrl" style="margin-top: 5px;"><i class="fa fa-bolt"></i> Test</button>
+            <span id="test_result_text" style="margin-left: 10px;"></span>
+        </div>
     </div>
 </div>
