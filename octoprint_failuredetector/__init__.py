@@ -112,15 +112,17 @@ class FailureDetectorPlugin(
                 enabled=True,
                 trigger="timer",
                 check_interval=15,
-                failure_confidence=0.8,
-                octolapse_is_present=False # This will be updated on startup
+                failure_confidence=0.8
             ),
             webcam_snapshot_url="http://127.0.0.1:8080/?action=snapshot"
         )
     
-    def on_settings_initialized(self):
-        self._settings.set_bool(["detection", "octolapse_is_present"], self.octolapse_is_present)
-        self._settings.save()
+    # --- THIS IS THE NEW, ROBUST METHOD TO ADD DATA TO THE SETTINGS UI ---
+    def get_settings_preprocessors(self):
+        def inject_octolapse_status(settings, *args, **kwargs):
+            settings["plugins"]["failuredetector"]["detection"]["octolapse_is_present"] = self.octolapse_is_present
+            return settings
+        return [("settings", inject_octolapse_status)]
 
     def get_template_configs(self):
         return [
@@ -130,12 +132,10 @@ class FailureDetectorPlugin(
             dict(type="generic", template="failuredetector_modal.jinja2")
         ]
 
+    # --- THIS IS NOW CORRECTED TO ONLY LOAD THE ONE WORKING JS FILE ---
     def get_assets(self):
         return dict(
-            js=[
-                "js/failuredetector.js",
-                "js/failuredetector_settings.js"
-            ]
+            js=["js/failuredetector.js"]
         )
 
     def get_api_commands(self):
@@ -232,33 +232,25 @@ class FailureDetectorPlugin(
             self._logger.error("FFmpeg is not installed. Cannot extract frames.")
             self._plugin_manager.send_plugin_message(self._identifier, {"type": "frame_list", "frames": [], "error": "FFmpeg backend not installed."})
             return
-
         try:
             timelapse_dir = self._settings.getBaseFolder("timelapse")
             video_path = os.path.join(timelapse_dir, filename)
-            
             tmp_dir = self._settings.getBaseFolder("timelapse_tmp")
             unique_folder_name = str(uuid.uuid4())
             frame_output_dir = os.path.join(tmp_dir, unique_folder_name)
             if os.path.exists(frame_output_dir):
                 shutil.rmtree(frame_output_dir)
             os.makedirs(frame_output_dir)
-
             ffprobe_cmd = ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=nb_frames", "-of", "default=nokey=1:noprint_wrappers=1", video_path]
             process = subprocess.run(ffprobe_cmd, capture_output=True, text=True, check=True)
             total_frames = int(process.stdout.strip())
-
             sample_count = 10
             step = max(1, total_frames // sample_count)
-
             ffmpeg_cmd = ["ffmpeg", "-i", video_path, "-vf", f"select='not(mod(n,{step}))'", "-vsync", "vfr", "-q:v", "2", os.path.join(frame_output_dir, "frame_%06d.jpg")]
-            
             self._logger.info(f"Running FFmpeg command: {' '.join(ffmpeg_cmd)}")
             subprocess.run(ffmpeg_cmd, check=True, capture_output=True, text=True)
-
             extracted_frames = sorted(glob.glob(os.path.join(frame_output_dir, "*.jpg")))
             extracted_frame_paths = [os.path.join(unique_folder_name, os.path.basename(p)) for p in extracted_frames]
-            
             self._logger.info(f"Successfully extracted {len(extracted_frame_paths)} frames.")
             self._plugin_manager.send_plugin_message(self._identifier, {"type": "frame_list", "frames": extracted_frame_paths, "base": f"plugin/{self._identifier}/temp_frame"})
         except subprocess.CalledProcessError as e:
@@ -280,7 +272,6 @@ class FailureDetectorPlugin(
                 time.sleep(1)
 
     def perform_check(self):
-        self._logger.info("--- Starting Perform Check ---")
         if not self.interpreter or not self.input_details:
             self._logger.error("Aborting check: AI model not loaded.")
             self._plugin_manager.send_plugin_message(self._identifier, dict(status="error", error="AI Model not loaded"))
@@ -305,7 +296,7 @@ class FailureDetectorPlugin(
                 failure_prob = scalar_prob
             else:
                 failure_prob = 1.0 - scalar_prob
-            confidence_threshold = self._settings.get_float(["failure_confidence"])
+            confidence_threshold = self._settings.get_float(["detection", "failure_confidence"])
             if failure_prob > confidence_threshold:
                 self._plugin_manager.send_plugin_message(self._identifier, dict(status="failure", result=f"{failure_prob:.2%}", snapshot_url=snapshot_url))
                 if self.is_printing:
@@ -318,7 +309,6 @@ class FailureDetectorPlugin(
             self._plugin_manager.send_plugin_message(self._identifier, dict(status="error", error=str(e)))
 
     def _upload_to_database(self, data):
-        self._logger.info("Starting community database upload process...")
         if not self.community_creds or not DATABASE_LIBS_AVAILABLE:
             self._logger.error("Community credentials or database libraries not loaded. Aborting upload.")
             self._plugin_manager.send_plugin_message(self._identifier, {"message": "Error: Backend not configured."})
@@ -327,7 +317,6 @@ class FailureDetectorPlugin(
             failed_frame_filename = data.get("failed_frame_path")
             if not failed_frame_filename:
                 self._logger.error("No failed frame filename was provided.")
-                self._plugin_manager.send_plugin_message(self._identifier, {"message": "Error: No frame specified."})
                 return
             
             image_bytes_obj = None
@@ -341,7 +330,6 @@ class FailureDetectorPlugin(
                 full_path_to_image = os.path.join(tmp_dir, failed_frame_filename)
                 if not os.path.exists(full_path_to_image):
                     self._logger.error(f"Cannot find specified frame on disk: {full_path_to_image}")
-                    self._plugin_manager.send_plugin_message(self._identifier, {"message": "Error: Frame not found."})
                     return
                 image_bytes_obj = open(full_path_to_image, "rb")
 
@@ -368,17 +356,12 @@ class FailureDetectorPlugin(
             self._plugin_manager.send_plugin_message(self._identifier, {"message": f"Error: {e}"})
 
     def get_update_information(self):
-        return dict(
-            failuredetector=dict(
-                displayName="AI Failure Detector",
-                displayVersion=self._plugin_version,
-                type="github_release",
-                user="YourUsername",
-                repo="Local-Failure-Detection",
-                current=self._plugin_version,
-                pip="https://github.com/{user}/{repo}/archive/{target_version}.zip"
-            )
-        )
+        return dict(failuredetector=dict(
+            displayName="AI Failure Detector", displayVersion=self._plugin_version,
+            type="github_release", user="YourUsername", repo="Local-Failure-Detection",
+            current=self._plugin_version,
+            pip="https://github.com/{user}/{repo}/archive/{target_version}.zip"
+        ))
 
 __plugin_name__ = "AI Failure Detector"
 __plugin_pythoncompat__ = ">=3,<4"
