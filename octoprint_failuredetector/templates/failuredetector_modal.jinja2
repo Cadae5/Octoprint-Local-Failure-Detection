@@ -1,4 +1,4 @@
-<!-- failuredetector_modal.jinja2 (The Corrected Version with 'if' Binding) -->
+<!-- failuredetector_modal.jinja2 (The Corrected Version with Working Slider) -->
 <div id="failure_report_modal" class="modal hide fade" tabindex="-1" role="dialog">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
@@ -23,8 +23,11 @@
             <p>Use the slider to select the first frame where the failure is visible.</p>
             <!-- ko if: timelapseFrames().length > 0 -->
             <img data-bind="attr: { src: selectedFrameUrl }" style="width: 100%; border-radius: 4px; background-color: #222;" />
+            
+            <!-- THIS IS THE CORRECTED SLIDER -->
             <input type="range" class="input-block-level" style="margin-top: 15px;"
-                   data-bind="value: selectedFrameIndex, min: 0, max: timelapseFrames().length - 1, valueUpdate: 'input'">
+                   data-bind="value: selectedFrameIndex, attr: {min: 0, max: timelapseFrames().length - 1, step: 1}, valueUpdate: 'input'">
+            
             <p class="text-center" data-bind="text: selectedFramePath"></p>
             <!-- /ko -->
             <!-- ko if: timelapseFrames().length === 0 -->
