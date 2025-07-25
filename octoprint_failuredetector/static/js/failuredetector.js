@@ -1,9 +1,10 @@
-// octoprint_failuredetector/static/js/failuredetector.js (The Final, Unified, Pagination Version)
+// octoprint_failuredetector/static/js/failuredetector.js
 
 $(function() {
     function FailureDetectorViewModel(parameters) {
         var self = this;
-        console.log("FailureDetector UNIFIED ViewModel initializing (Pagination Version)...");
+        // This log is our proof that the script is running AT ALL.
+        console.log("FailureDetector UNIFIED ViewModel initializing...");
 
         // --- SECTION 1: All UI Variables (Observables) ---
         self.statusText = ko.observable("Failure Detector is Idle.");
@@ -20,7 +21,7 @@ $(function() {
         self.timelapseFrames = ko.observableArray([]);
         self.selectedFrameIndex = ko.observable(0);
         self.lastSnapshotUrl = ko.observable(null);
-        self.allRecordedTimelapses = ko.observableArray([]);
+        self.recordedTimelapses = ko.observableArray([]);
         self.currentPage = ko.observable(0);
         self.itemsPerPage = ko.observable(5);
         self.frameBaseUrl = ko.observable("");
@@ -61,11 +62,11 @@ $(function() {
         });
         self.finalConfirmTitle = ko.computed(function() { return self.isFailureReport() ? "Confirm Failure and Submit" : "Confirm Success and Submit"; });
         self.finalFailureTypeText = ko.computed(function() { return "Outcome: " + (self.isFailureReport() ? self.selectedFailureType() : "Success"); });
-        self.totalPages = ko.computed(function() { return Math.ceil(self.allRecordedTimelapses().length / self.itemsPerPage()); });
+        self.totalPages = ko.computed(function() { return Math.ceil(self.recordedTimelapses().length / self.itemsPerPage()); });
         self.paginatedTimelapses = ko.computed(function() {
             var start = self.currentPage() * self.itemsPerPage();
             var end = start + self.itemsPerPage();
-            return self.allRecordedTimelapses().slice(start, end);
+            return self.recordedTimelapses().slice(start, end);
         });
         self.canGoPrevious = ko.computed(function() { return self.currentPage() > 0; });
         self.canGoNext = ko.computed(function() { return self.currentPage() < self.totalPages() - 1; });
@@ -73,19 +74,20 @@ $(function() {
         // --- SECTION 3: All UI Actions (Button Clicks) ---
         self.forceCheck = function() { console.log("JS: 'Force Check' button clicked."); OctoPrint.simpleApiCommand("failuredetector", "force_check"); };
         self.openFailureReportModal = function() {
-            console.log("JS: 'Report Failure' button clicked.");
-            self.lastSnapshotUrl(self.snapshotUrlWithCacheBuster());
+            console.log("JS: 'Report Failure' from snapshot button clicked.");
+            self.lastSnapshotUrl(self.snapshotUrlWithCacheBuster()); // Use the live snapshot
+            self.timelapseFrames([]); // Ensure this is empty
             self.modalScreen('confirm_failure');
             $('#failure_report_modal').modal('show');
         };
         self.refreshTimelapseList = function() {
-            console.log("JS: Requesting list of recorded timelapses.");
+            console.log("JS: 'Refresh List' button clicked.");
             self.statusText("Refreshing timelapse list...");
             self.isChecking(true);
             OctoPrint.simpleApiCommand("failuredetector", "list_recorded_timelapses");
         };
         self.reportFailureForTimelapse = function(timelapse) {
-            console.log("JS: Report button clicked for timelapse:", timelapse.name);
+            console.log("JS: 'Report Outcome' for timelapse button clicked:", timelapse.name);
             self.statusText("Extracting frames...");
             self.isChecking(true);
             OctoPrint.simpleApiCommand("failuredetector", "list_timelapse_frames", { filename: timelapse.name });
@@ -128,9 +130,14 @@ $(function() {
                     self.isChecking(false);
                     self.statusText("Idle");
                 }
-                if (data.type === 'show_post_print_dialog') { self.openFailureReportModal(); return; }
+                if (data.type === 'show_post_print_dialog') {
+                    self.lastSnapshotUrl(self.snapshotUrlWithCacheBuster()); // Use the last live snapshot
+                    self.timelapseFrames([]); // Ensure this is empty for post-print dialog
+                    self.openFailureReportModal();
+                    return;
+                }
                 if (data.type === 'recorded_timelapse_list') {
-                    self.allRecordedTimelapses(data.timelapses);
+                    self.recordedTimelapses(data.timelapses);
                     self.currentPage(0);
                     if (data.timelapses.length === 0) {
                         new PNotify({title: "Info", text: "No timelapse recordings (.mp4) found.", type: "info", hide: true});
@@ -176,6 +183,7 @@ $(function() {
         }
     }
 
+    // This single ViewModel now controls EVERYTHING and has NO dependencies.
     OCTOPRINT_VIEWMODELS.push({
         construct: FailureDetectorViewModel,
         dependencies: [],
