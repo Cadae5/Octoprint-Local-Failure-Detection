@@ -132,7 +132,6 @@ class FailureDetectorPlugin(
             dict(type="generic", template="failuredetector_modal.jinja2")
         ]
 
-    # --- THIS IS NOW CORRECTED TO ONLY LOAD THE ONE WORKING JS FILE ---
     def get_assets(self):
         return dict(
             js=["js/failuredetector.js"]
