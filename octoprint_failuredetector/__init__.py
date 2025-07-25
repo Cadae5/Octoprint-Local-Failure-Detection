@@ -51,6 +51,7 @@ class FailureDetectorPlugin(
         self.labels = []
         self.community_creds = None
         self.firebase_app = None
+        self.octolapse_is_present = False
 
     def on_after_startup(self):
         self._logger.info("AI Failure Detector starting up...")
@@ -58,6 +59,10 @@ class FailureDetectorPlugin(
             self._logger.error("TensorFlow Lite runtime is not installed. AI features will be disabled.")
         if not FFMPEG_AVAILABLE:
             self._logger.error("FFmpeg executable not found in PATH. Timelapse features will be disabled.")
+        
+        if self._plugin_manager.get_plugin("octolapse") is not None:
+            self._logger.info("Octolapse plugin detected. Enabling integration option.")
+            self.octolapse_is_present = True
         
         self._load_community_credentials()
         self.load_model()
@@ -103,10 +108,19 @@ class FailureDetectorPlugin(
 
     def get_settings_defaults(self):
         return dict(
-            check_interval=15,
-            failure_confidence=0.8,
+            detection=dict(
+                enabled=True,
+                trigger="timer",
+                check_interval=15,
+                failure_confidence=0.8,
+                octolapse_is_present=False # This will be updated on startup
+            ),
             webcam_snapshot_url="http://127.0.0.1:8080/?action=snapshot"
         )
+    
+    def on_settings_initialized(self):
+        self._settings.set_bool(["detection", "octolapse_is_present"], self.octolapse_is_present)
+        self._settings.save()
 
     def get_template_configs(self):
         return [
@@ -117,7 +131,12 @@ class FailureDetectorPlugin(
         ]
 
     def get_assets(self):
-        return dict(js=["js/failuredetector.js"])
+        return dict(
+            js=[
+                "js/failuredetector.js",
+                "js/failuredetector_settings.js"
+            ]
+        )
 
     def get_api_commands(self):
         return dict(
@@ -143,25 +162,20 @@ class FailureDetectorPlugin(
                 thumb_dir = os.path.join(timelapse_dir, "thumbnails")
                 if not os.path.exists(thumb_dir):
                     os.makedirs(thumb_dir)
-
                 mp4_files = sorted(glob.glob(os.path.join(timelapse_dir, "*.mp4")), key=os.path.getmtime, reverse=True)
-                
                 timelapse_info = []
                 for f_path in mp4_files:
                     f_name = os.path.basename(f_path)
                     thumb_name = f_name.replace(".mp4", ".jpg")
                     thumb_path = os.path.join(thumb_dir, thumb_name)
-
                     if not os.path.exists(thumb_path):
                         self._generate_thumbnail(f_path, thumb_path)
-                    
                     timelapse_info.append({
                         "name": f_name,
                         "size_mb": round(os.path.getsize(f_path) / (1024*1024), 2),
                         "thumbnail_url": f"plugin/{self._identifier}/thumbnail/{thumb_name}"
                     })
                 self._plugin_manager.send_plugin_message(self._identifier, {"type": "recorded_timelapse_list", "timelapses": timelapse_info})
-
             except Exception as e:
                 self._logger.exception("Error listing recorded timelapses:")
                 self._plugin_manager.send_plugin_message(self._identifier, {"type": "error", "message": "Could not list timelapses. Check log."})
@@ -176,35 +190,40 @@ class FailureDetectorPlugin(
             upload_thread = threading.Thread(target=self._upload_to_database, args=(data,))
             upload_thread.daemon = True
             upload_thread.start()
-
+    
     def _generate_thumbnail(self, video_path, thumb_path):
         self._logger.info(f"Generating thumbnail for {os.path.basename(video_path)}...")
         try:
-            ffmpeg_cmd = [
-                "ffmpeg",
-                "-i", video_path,
-                "-ss", "00:00:01.000",
-                "-vframes", "1",
-                "-q:v", "3",
-                thumb_path
-            ]
+            ffmpeg_cmd = ["ffmpeg", "-i", video_path, "-ss", "00:00:01.000", "-vframes", "1", "-q:v", "3", thumb_path]
             subprocess.run(ffmpeg_cmd, check=True, capture_output=True, text=True)
             self._logger.info("Thumbnail generated successfully.")
         except Exception as e:
             self._logger.exception("Failed to generate thumbnail:")
 
     def on_event(self, event, payload):
+        if not self._settings.get_bool(["detection", "enabled"]):
+            return
+
         if event == "PrintStarted":
-            self.is_printing = True
-            self.detection_thread = threading.Thread(target=self.detection_loop)
-            self.detection_thread.daemon = True
-            self.detection_thread.start()
-        elif event in ("PrintCancelled"):
+            if self._settings.get(["detection", "trigger"]) == "timer":
+                self._logger.info("Print started. Starting detection timer.")
+                self.is_printing = True
+                self.detection_thread = threading.Thread(target=self.detection_loop)
+                self.detection_thread.daemon = True
+                self.detection_thread.start()
+        
+        elif event == "octolapse_snapshot_taken":
+            if self._settings.get(["detection", "trigger"]) == "octolapse":
+                self._logger.info("Octolapse frame captured. Triggering failure check.")
+                self.perform_check()
+
+        elif event in ("PrintCancelled", "PrintFailed"):
             self.is_printing = False
             self._plugin_manager.send_plugin_message(self._identifier, dict(status="idle"))
+
         elif event == "PrintDone":
-            self._logger.info("Print finished. Triggering failure report dialog.")
             self.is_printing = False
+            self._logger.info("Print finished. Triggering failure report dialog.")
             self._plugin_manager.send_plugin_message(self._identifier, {"type": "show_post_print_dialog"})
 
     def _extract_frames_from_video(self, filename):
