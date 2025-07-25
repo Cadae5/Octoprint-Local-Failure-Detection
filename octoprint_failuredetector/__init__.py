@@ -117,15 +117,12 @@ class FailureDetectorPlugin(
             webcam_snapshot_url="http://127.0.0.1:8080/?action=snapshot"
         )
     
-    # --- THIS IS THE CRITICAL FIX ---
-    # This method is now structured correctly, returning two values as required.
     def get_settings_preprocessors(self):
         def inject_octolapse_status(settings, *args, **kwargs):
             if "plugins" in settings and "failuredetector" in settings["plugins"]:
                  settings["plugins"]["failuredetector"]["detection"]["octolapse_is_present"] = self.octolapse_is_present
             return settings
         
-        # Return the function for processing GET requests, and None for POST requests.
         return inject_octolapse_status, None
 
     def get_template_configs(self):
@@ -202,7 +199,9 @@ class FailureDetectorPlugin(
             self._logger.exception("Failed to generate thumbnail:")
 
     def on_event(self, event, payload):
-        if not self._settings.get_bool(["detection", "enabled"]):
+        # --- THIS IS THE CRITICAL FIX ---
+        # The incorrect 'get_bool' is replaced with the correct 'get_boolean'.
+        if not self._settings.get_boolean(["detection", "enabled"]):
             return
 
         if event == "PrintStarted":
