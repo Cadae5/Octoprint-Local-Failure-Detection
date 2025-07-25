@@ -1,9 +1,9 @@
-// octoprint_failuredetector/static/js/failuredetector.js
+// octoprint_failuredetector/static/js/failuredetector.js (The Final, Unified, Pagination Version)
 
 $(function() {
     function FailureDetectorViewModel(parameters) {
         var self = this;
-        console.log("FailureDetector UNIFIED ViewModel initializing (Robust Version)...");
+        console.log("FailureDetector UNIFIED ViewModel initializing (Pagination Version)...");
 
         // --- SECTION 1: All UI Variables (Observables) ---
         self.statusText = ko.observable("Failure Detector is Idle.");
@@ -20,19 +20,14 @@ $(function() {
         self.timelapseFrames = ko.observableArray([]);
         self.selectedFrameIndex = ko.observable(0);
         self.lastSnapshotUrl = ko.observable(null);
-        self.recordedTimelapses = ko.observableArray([]);
+        self.allRecordedTimelapses = ko.observableArray([]);
+        self.currentPage = ko.observable(0);
+        self.itemsPerPage = ko.observable(5);
         self.frameBaseUrl = ko.observable("");
 
         // --- SECTION 2: All UI Derived Values (Computed) ---
-        self.snapshotUrlWithCacheBuster = ko.computed(function() {
-            if (self.snapshotUrl()) {
-                return self.snapshotUrl() + "?_t=" + self.snapshotTimestamp();
-            }
-            return null;
-        });
-        self.lastResultText = ko.computed(function() {
-            return "Last check confidence: " + self.lastResult();
-        });
+        self.snapshotUrlWithCacheBuster = ko.computed(function() { if (self.snapshotUrl()) return self.snapshotUrl() + "?_t=" + self.snapshotTimestamp(); return null; });
+        self.lastResultText = ko.computed(function() { return "Last check confidence: " + self.lastResult(); });
         self.statusColor = ko.computed(function() {
             var text = self.statusText();
             if (text.includes("Failure")) return "red";
@@ -56,39 +51,27 @@ $(function() {
                 default: return 'Report';
             }
         });
-        self.modalConfirmText = ko.computed(function() {
-            return self.modalScreen() === 'final_confirm' ? 'Submit' : (self.modalScreen() === 'draw_boxes' ? 'Skip & Confirm' : 'Next');
-        });
-        self.modalConfirmEnabled = ko.computed(function() {
-            return self.modalScreen() === 'final_confirm' ? self.acceptDataUse() : true;
-        });
-        self.selectedFramePath = ko.computed(function() {
-            if (self.timelapseFrames().length > 0 && self.selectedFrameIndex() < self.timelapseFrames().length) {
-                return self.timelapseFrames()[self.selectedFrameIndex()];
-            }
-            return null;
-        });
+        self.modalConfirmText = ko.computed(function() { return self.modalScreen() === 'final_confirm' ? 'Submit' : (self.modalScreen() === 'draw_boxes' ? 'Skip & Confirm' : 'Next'); });
+        self.modalConfirmEnabled = ko.computed(function() { return self.modalScreen() === 'final_confirm' ? self.acceptDataUse() : true; });
+        self.selectedFramePath = ko.computed(function() { if (self.timelapseFrames().length > 0 && self.selectedFrameIndex() < self.timelapseFrames().length) { return self.timelapseFrames()[self.selectedFrameIndex()]; } return null; });
         self.selectedFrameUrl = ko.computed(function() {
-            if (self.selectedFramePath()) {
-                return self.frameBaseUrl() + "/" + self.selectedFramePath();
-            }
-            if (self.modalScreen() === 'final_confirm' && !self.isFailureReport()) {
-                return self.lastSnapshotUrl();
-            }
+            if (self.selectedFramePath()) { return self.frameBaseUrl() + "/" + self.selectedFramePath(); }
+            if (self.modalScreen() === 'final_confirm' && !self.isFailureReport()) { return self.lastSnapshotUrl(); }
             return null;
         });
-        self.finalConfirmTitle = ko.computed(function() {
-            return self.isFailureReport() ? "Confirm Failure and Submit" : "Confirm Success and Submit";
+        self.finalConfirmTitle = ko.computed(function() { return self.isFailureReport() ? "Confirm Failure and Submit" : "Confirm Success and Submit"; });
+        self.finalFailureTypeText = ko.computed(function() { return "Outcome: " + (self.isFailureReport() ? self.selectedFailureType() : "Success"); });
+        self.totalPages = ko.computed(function() { return Math.ceil(self.allRecordedTimelapses().length / self.itemsPerPage()); });
+        self.paginatedTimelapses = ko.computed(function() {
+            var start = self.currentPage() * self.itemsPerPage();
+            var end = start + self.itemsPerPage();
+            return self.allRecordedTimelapses().slice(start, end);
         });
-        self.finalFailureTypeText = ko.computed(function() {
-            return "Outcome: " + (self.isFailureReport() ? self.selectedFailureType() : "Success");
-        });
+        self.canGoPrevious = ko.computed(function() { return self.currentPage() > 0; });
+        self.canGoNext = ko.computed(function() { return self.currentPage() < self.totalPages() - 1; });
 
         // --- SECTION 3: All UI Actions (Button Clicks) ---
-        self.forceCheck = function() {
-            console.log("JS: 'Force Check' button clicked.");
-            OctoPrint.simpleApiCommand("failuredetector", "force_check");
-        };
+        self.forceCheck = function() { console.log("JS: 'Force Check' button clicked."); OctoPrint.simpleApiCommand("failuredetector", "force_check"); };
         self.openFailureReportModal = function() {
             console.log("JS: 'Report Failure' button clicked.");
             self.lastSnapshotUrl(self.snapshotUrlWithCacheBuster());
@@ -107,25 +90,15 @@ $(function() {
             self.isChecking(true);
             OctoPrint.simpleApiCommand("failuredetector", "list_timelapse_frames", { filename: timelapse.name });
         };
-        self.reportYes = function() {
-            console.log("JS Modal: Clicked YES");
-            self.isFailureReport(true);
-            self.modalScreen('select_frame');
-        };
-        self.reportNo = function() {
-            console.log("JS Modal: Clicked NO");
-            self.isFailureReport(false);
-            self.modalScreen('final_confirm');
-        };
+        self.reportYes = function() { console.log("JS Modal: Clicked YES"); self.isFailureReport(true); self.modalScreen('select_frame'); };
+        self.reportNo = function() { console.log("JS Modal: Clicked NO"); self.isFailureReport(false); self.modalScreen('final_confirm'); };
         self.modalConfirm = function() {
-            console.log("JS Modal: Clicked CONFIRM/NEXT/SUBMIT");
             var screen = self.modalScreen();
             if (screen === 'select_frame') self.modalScreen('draw_boxes');
             else if (screen === 'draw_boxes') self.modalScreen('final_confirm');
             else if (screen === 'final_confirm') self.submitFinalReport();
         };
         self.modalBack = function() {
-            console.log("JS Modal: Clicked BACK");
             var screen = self.modalScreen();
             if (screen === 'select_frame') self.modalScreen('confirm_failure');
             else if (screen === 'draw_boxes') self.modalScreen('select_frame');
@@ -143,6 +116,8 @@ $(function() {
             OctoPrint.simpleApiCommand("failuredetector", "upload_failure_data", payload);
             $('#failure_report_modal').modal('hide');
         };
+        self.previousPage = function() { if (self.canGoPrevious()) { self.currentPage(self.currentPage() - 1); } };
+        self.nextPage = function() { if (self.canGoNext()) { self.currentPage(self.currentPage() + 1); } };
 
         // --- SECTION 4: The Single Message Handler ---
         self.onDataUpdaterPluginMessage = function(plugin, data) {
@@ -153,13 +128,10 @@ $(function() {
                     self.isChecking(false);
                     self.statusText("Idle");
                 }
-
-                if (data.type === 'show_post_print_dialog') {
-                    self.openFailureReportModal();
-                    return;
-                }
+                if (data.type === 'show_post_print_dialog') { self.openFailureReportModal(); return; }
                 if (data.type === 'recorded_timelapse_list') {
-                    self.recordedTimelapses(data.timelapses);
+                    self.allRecordedTimelapses(data.timelapses);
+                    self.currentPage(0);
                     if (data.timelapses.length === 0) {
                         new PNotify({title: "Info", text: "No timelapse recordings (.mp4) found.", type: "info", hide: true});
                     }
@@ -185,10 +157,7 @@ $(function() {
                     $('#failure_report_modal').modal('show');
                     return;
                 }
-                if (data.snapshot_url) {
-                    self.snapshotUrl(data.snapshot_url);
-                    self.snapshotTimestamp(new Date().getTime());
-                }
+                if (data.snapshot_url) { self.snapshotUrl(data.snapshot_url); self.snapshotTimestamp(new Date().getTime()); }
                 if (data.status) {
                     switch (data.status) {
                         case "checking": self.isChecking(true); self.statusText("Checking..."); break;
