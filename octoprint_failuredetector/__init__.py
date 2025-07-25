@@ -57,7 +57,7 @@ class FailureDetectorPlugin(
         if not TFLITE_AVAILABLE:
             self._logger.error("TensorFlow Lite runtime is not installed. AI features will be disabled.")
         if not FFMPEG_AVAILABLE:
-            self._logger.error("FFmpeg executable not found in PATH. Timelapse frame extraction will be disabled.")
+            self._logger.error("FFmpeg executable not found in PATH. Timelapse features will be disabled.")
         
         self._load_community_credentials()
         self.load_model()
@@ -95,6 +95,11 @@ class FailureDetectorPlugin(
     def serve_temp_frame(self, filename):
         temp_dir = self._settings.getBaseFolder("timelapse_tmp")
         return send_from_directory(temp_dir, filename)
+
+    @octoprint.plugin.BlueprintPlugin.route("/thumbnail/<path:filename>", methods=["GET"])
+    def serve_thumbnail(self, filename):
+        thumb_dir = os.path.join(self._settings.getBaseFolder("timelapse"), "thumbnails")
+        return send_from_directory(thumb_dir, filename)
 
     def get_settings_defaults(self):
         return dict(
@@ -135,15 +140,31 @@ class FailureDetectorPlugin(
             self._logger.info("API call received to list recorded timelapses.")
             try:
                 timelapse_dir = self._settings.getBaseFolder("timelapse")
+                thumb_dir = os.path.join(timelapse_dir, "thumbnails")
+                if not os.path.exists(thumb_dir):
+                    os.makedirs(thumb_dir)
+
                 mp4_files = sorted(glob.glob(os.path.join(timelapse_dir, "*.mp4")), key=os.path.getmtime, reverse=True)
-                timelapse_info = [
-                    {"name": os.path.basename(f), "size_mb": round(os.path.getsize(f) / (1024*1024), 2)}
-                    for f in mp4_files
-                ]
+                
+                timelapse_info = []
+                for f_path in mp4_files:
+                    f_name = os.path.basename(f_path)
+                    thumb_name = f_name.replace(".mp4", ".jpg")
+                    thumb_path = os.path.join(thumb_dir, thumb_name)
+
+                    if not os.path.exists(thumb_path):
+                        self._generate_thumbnail(f_path, thumb_path)
+                    
+                    timelapse_info.append({
+                        "name": f_name,
+                        "size_mb": round(os.path.getsize(f_path) / (1024*1024), 2),
+                        "thumbnail_url": f"plugin/{self._identifier}/thumbnail/{thumb_name}"
+                    })
                 self._plugin_manager.send_plugin_message(self._identifier, {"type": "recorded_timelapse_list", "timelapses": timelapse_info})
+
             except Exception as e:
                 self._logger.exception("Error listing recorded timelapses:")
-                self._plugin_manager.send_plugin_message(self._identifier, {"type": "error", "message": "Could not list timelapses. Check octoprint.log."})
+                self._plugin_manager.send_plugin_message(self._identifier, {"type": "error", "message": "Could not list timelapses. Check log."})
 
         elif command == "list_timelapse_frames":
             filename = data.get("filename")
@@ -155,6 +176,22 @@ class FailureDetectorPlugin(
             upload_thread = threading.Thread(target=self._upload_to_database, args=(data,))
             upload_thread.daemon = True
             upload_thread.start()
+
+    def _generate_thumbnail(self, video_path, thumb_path):
+        self._logger.info(f"Generating thumbnail for {os.path.basename(video_path)}...")
+        try:
+            ffmpeg_cmd = [
+                "ffmpeg",
+                "-i", video_path,
+                "-ss", "00:00:01.000",
+                "-vframes", "1",
+                "-q:v", "3",
+                thumb_path
+            ]
+            subprocess.run(ffmpeg_cmd, check=True, capture_output=True, text=True)
+            self._logger.info("Thumbnail generated successfully.")
+        except Exception as e:
+            self._logger.exception("Failed to generate thumbnail:")
 
     def on_event(self, event, payload):
         if event == "PrintStarted":
@@ -330,7 +367,6 @@ __plugin_pythoncompat__ = ">=3,<4"
 def __plugin_load__():
     global __plugin_implementation__
     __plugin_implementation__ = FailureDetectorPlugin()
-    
     global __plugin_hooks__
     __plugin_hooks__ = {
         "octoprint.plugin.softwareupdate.check_config": __plugin_implementation__.get_update_information
