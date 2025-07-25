@@ -32,6 +32,7 @@ except ImportError:
 
 FFMPEG_AVAILABLE = shutil.which("ffmpeg") is not None
 
+# --- THIS IS THE CRITICAL FIX: RESTORING ALL NECESSARY MIXINS ---
 class FailureDetectorPlugin(
     octoprint.plugin.StartupPlugin,
     octoprint.plugin.EventHandlerPlugin,
@@ -117,7 +118,6 @@ class FailureDetectorPlugin(
             webcam_snapshot_url="http://127.0.0.1:8080/?action=snapshot"
         )
     
-    # --- THIS IS THE NEW, ROBUST METHOD TO ADD DATA TO THE SETTINGS UI ---
     def get_settings_preprocessors(self):
         def inject_octolapse_status(settings, *args, **kwargs):
             settings["plugins"]["failuredetector"]["detection"]["octolapse_is_present"] = self.octolapse_is_present
@@ -133,9 +133,7 @@ class FailureDetectorPlugin(
         ]
 
     def get_assets(self):
-        return dict(
-            js=["js/failuredetector.js"]
-        )
+        return dict(js=["js/failuredetector.js"])
 
     def get_api_commands(self):
         return dict(
@@ -265,7 +263,7 @@ class FailureDetectorPlugin(
             else:
                 self.is_printing = False
                 break
-            check_interval = self._settings.get_int(["check_interval"])
+            check_interval = self._settings.get_int(["detection", "check_interval"])
             for _ in range(check_interval):
                 if not self.is_printing: break
                 time.sleep(1)
@@ -355,12 +353,17 @@ class FailureDetectorPlugin(
             self._plugin_manager.send_plugin_message(self._identifier, {"message": f"Error: {e}"})
 
     def get_update_information(self):
-        return dict(failuredetector=dict(
-            displayName="AI Failure Detector", displayVersion=self._plugin_version,
-            type="github_release", user="YourUsername", repo="Local-Failure-Detection",
-            current=self._plugin_version,
-            pip="https://github.com/{user}/{repo}/archive/{target_version}.zip"
-        ))
+        return dict(
+            failuredetector=dict(
+                displayName="AI Failure Detector",
+                displayVersion=self._plugin_version,
+                type="github_release",
+                user="YourUsername",
+                repo="Local-Failure-Detection",
+                current=self._plugin_version,
+                pip="https://github.com/{user}/{repo}/archive/{target_version}.zip"
+            )
+        )
 
 __plugin_name__ = "AI Failure Detector"
 __plugin_pythoncompat__ = ">=3,<4"
