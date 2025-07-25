@@ -51,7 +51,6 @@ class FailureDetectorPlugin(
         self.labels = []
         self.community_creds = None
         self.firebase_app = None
-        self.octolapse_is_present = False
 
     def on_after_startup(self):
         self._logger.info("AI Failure Detector starting up...")
@@ -59,10 +58,6 @@ class FailureDetectorPlugin(
             self._logger.error("TensorFlow Lite runtime is not installed. AI features will be disabled.")
         if not FFMPEG_AVAILABLE:
             self._logger.error("FFmpeg executable not found in PATH. Timelapse features will be disabled.")
-        
-        if self._plugin_manager.get_plugin("octolapse") is not None:
-            self._logger.info("Octolapse plugin detected. Enabling integration option.")
-            self.octolapse_is_present = True
         
         self._load_community_credentials()
         self.load_model()
@@ -113,7 +108,7 @@ class FailureDetectorPlugin(
                 trigger="timer",
                 check_interval=15,
                 failure_confidence=0.8,
-                octolapse_is_present=False # Add the key to the defaults
+                octolapse_is_present=False # This default is overridden by the init function
             ),
             webcam_snapshot_url="http://127.0.0.1:8080/?action=snapshot"
         )
@@ -121,8 +116,11 @@ class FailureDetectorPlugin(
     # --- THIS IS THE CRITICAL FIX: USING THE CORRECT, STABLE METHOD ---
     def on_settings_initialized(self):
         # This function runs once after settings are loaded and is the correct place
-        # to inject runtime information into the settings.
-        self._settings.set_boolean(["detection", "octolapse_is_present"], self.octolapse_is_present)
+        # to check for other plugins and save the result.
+        octolapse_is_present = self._plugin_manager.get_plugin("octolapse") is not None
+        if octolapse_is_present:
+            self._logger.info("Octolapse plugin detected, updating settings.")
+        self._settings.set_boolean(["detection", "octolapse_is_present"], octolapse_is_present)
         self._settings.save()
 
     def get_template_configs(self):
@@ -199,7 +197,6 @@ class FailureDetectorPlugin(
             self._logger.exception("Failed to generate thumbnail:")
 
     def on_event(self, event, payload):
-        # --- THIS IS THE CRITICAL FIX: USING THE CORRECT FUNCTION NAME ---
         if not self._settings.get_boolean(["detection", "enabled"]):
             return
 
