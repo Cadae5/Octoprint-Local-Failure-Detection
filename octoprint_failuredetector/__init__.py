@@ -113,23 +113,17 @@ class FailureDetectorPlugin(
                 trigger="timer",
                 check_interval=15,
                 failure_confidence=0.8,
-                octolapse_is_present=False # This default is overridden by the preprocessor
+                octolapse_is_present=False # Add the key to the defaults
             ),
             webcam_snapshot_url="http://127.0.0.1:8080/?action=snapshot"
         )
     
-    # --- THIS IS THE CRITICAL FIX ---
-    # This method is now structured correctly, returning two values as required.
-    def get_settings_preprocessors(self):
-        def inject_octolapse_status(settings, *args, **kwargs):
-            # This function runs every time settings are sent to the frontend
-            if "plugins" in settings and "failuredetector" in settings["plugins"]:
-                 settings["plugins"]["failuredetector"]["detection"]["octolapse_is_present"] = self.octolapse_is_present
-            return settings
-        
-        # We return the function for processing GET requests, and None for POST requests.
-        # This solves the ValueError and correctly injects our data.
-        return inject_octolapse_status, None
+    # --- THIS IS THE CRITICAL FIX: USING THE CORRECT, STABLE METHOD ---
+    def on_settings_initialized(self):
+        # This function runs once after settings are loaded and is the correct place
+        # to inject runtime information into the settings.
+        self._settings.set_boolean(["detection", "octolapse_is_present"], self.octolapse_is_present)
+        self._settings.save()
 
     def get_template_configs(self):
         return [
@@ -205,6 +199,7 @@ class FailureDetectorPlugin(
             self._logger.exception("Failed to generate thumbnail:")
 
     def on_event(self, event, payload):
+        # --- THIS IS THE CRITICAL FIX: USING THE CORRECT FUNCTION NAME ---
         if not self._settings.get_boolean(["detection", "enabled"]):
             return
 
